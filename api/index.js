@@ -43,8 +43,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/terms', termRoutes);
 app.use('/api/reports', reportRoutes);
 
-// 404 handler for API routes
-app.use('/api/*', (req, res) => {
+// 404 handler for API routes (Express 5 requires named parameter)
+app.use('/api/{*splat}', (req, res) => {
   res.status(404).json({
     success: false,
     message: `API endpoint not found: ${req.method} ${req.path}`,
