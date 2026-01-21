@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Users, School, BarChart3, LogOut, Search, Plus,
   Edit2, Key, UserX, ChevronDown, ChevronUp, X,
-  Shield, UserCheck, Building, Globe, RefreshCw
+  Shield, UserCheck, Building, Globe, RefreshCw, BookOpen, Upload
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -20,6 +20,8 @@ import {
 } from '../hooks/useAdmin';
 import ConfirmModal from './ConfirmModal';
 import AppFooter from './AppFooter';
+import BulkImportStudents from './BulkImportStudents';
+import { useStudents } from '../hooks/useStudents';
 
 const SuperuserDashboard = () => {
   const { user, logout } = useAuth();
@@ -37,6 +39,8 @@ const SuperuserDashboard = () => {
   const [expandedUserId, setExpandedUserId] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, user: null });
   const [isDeactivating, setIsDeactivating] = useState(false);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
+  const [selectedSchoolForStudents, setSelectedSchoolForStudents] = useState('');
 
   // Fetch data
   const { data: stats, isLoading: loadingStats } = useAdminStats();
@@ -48,6 +52,9 @@ const SuperuserDashboard = () => {
     countryId: countryFilter || undefined,
   });
   const { data: countries = [] } = useCountries();
+  const { data: students = [], isLoading: loadingStudents, refetch: refetchStudents } = useStudents(
+    selectedSchoolForStudents ? { schoolId: selectedSchoolForStudents } : {}
+  );
 
   // Mutations
   const createUser = useCreateUser();
@@ -459,10 +466,115 @@ const SuperuserDashboard = () => {
     );
   };
 
+  const renderStudents = () => {
+    return (
+      <div className="space-y-4">
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row gap-3 bg-white p-4 rounded-lg shadow-sm">
+          <select
+            value={selectedSchoolForStudents}
+            onChange={(e) => setSelectedSchoolForStudents(e.target.value)}
+            className="flex-1 px-3 py-2 border border-gray-200 rounded-md text-sm min-w-[250px]"
+          >
+            <option value="">Select a school to view students...</option>
+            {schools.map((s) => (
+              <option key={s.id} value={s.id}>{s.name} ({s.country?.name})</option>
+            ))}
+          </select>
+          {selectedSchoolForStudents && (
+            <button
+              onClick={() => setShowBulkImportModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+            >
+              <Upload size={16} />
+              Bulk Import Students
+            </button>
+          )}
+        </div>
+
+        {/* Students List */}
+        {!selectedSchoolForStudents ? (
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+            <BookOpen size={48} className="mx-auto text-gray-300 mb-4" />
+            <h3 className="font-medium text-gray-700 mb-2">Select a School</h3>
+            <p className="text-sm text-gray-500">
+              Choose a school from the dropdown above to view and manage its students.
+            </p>
+          </div>
+        ) : loadingStudents ? (
+          <div className="text-center py-8 text-gray-500">Loading students...</div>
+        ) : students.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+            <BookOpen size={48} className="mx-auto text-gray-300 mb-4" />
+            <h3 className="font-medium text-gray-700 mb-2">No Students Yet</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              This school has no students registered yet. Use bulk import to add students.
+            </p>
+            <button
+              onClick={() => setShowBulkImportModal(true)}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+            >
+              Bulk Import Students
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="px-4 py-3 bg-gray-50 border-b">
+              <span className="text-sm text-gray-600">
+                {students.length} student{students.length !== 1 ? 's' : ''} in this school
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Name</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Student ID</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Class</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Date of Birth</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {students.map((student) => (
+                    <tr key={student.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-800">
+                          {student.firstName} {student.lastName}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {student.studentIdNumber || '-'}
+                      </td>
+                      <td className="px-4 py-3">
+                        {student.class ? (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
+                            {student.class.name}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {student.dateOfBirth
+                          ? new Date(student.dateOfBirth).toLocaleDateString()
+                          : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const navItems = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'schools', label: 'Schools', icon: School },
+    { id: 'students', label: 'Students', icon: BookOpen },
   ];
 
   return (
@@ -522,6 +634,7 @@ const SuperuserDashboard = () => {
         {currentView === 'overview' && renderOverview()}
         {currentView === 'users' && renderUsers()}
         {currentView === 'schools' && renderSchools()}
+        {currentView === 'students' && renderStudents()}
       </div>
 
       {/* Create User Modal */}
@@ -594,6 +707,16 @@ const SuperuserDashboard = () => {
         title="Deactivate User"
         message={`Are you sure you want to deactivate ${confirmModal.user?.firstName} ${confirmModal.user?.lastName}? They will no longer be able to log in to the system.`}
         confirmText="Deactivate"
+      />
+
+      {/* Bulk Import Students Modal */}
+      <BulkImportStudents
+        isOpen={showBulkImportModal}
+        onClose={() => setShowBulkImportModal(false)}
+        onSuccess={() => {
+          refetchStudents();
+        }}
+        schoolId={selectedSchoolForStudents}
       />
 
       {/* Footer */}

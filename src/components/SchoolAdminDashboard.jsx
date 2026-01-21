@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   School, Users, GraduationCap, BookOpen, LogOut, Edit2,
   Save, X, Phone, Mail, MapPin, Calendar, RefreshCw, Plus,
-  UserPlus, Search, BarChart3
+  UserPlus, Search, BarChart3, Upload
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -14,6 +14,7 @@ import ClassSetupModal from './ClassSetupModal';
 import ClassEditModal from './ClassEditModal';
 import StudentEntryModal from './StudentEntryModal';
 import StudentEditModal from './StudentEditModal';
+import BulkImportStudents from './BulkImportStudents';
 import ConfirmModal from './ConfirmModal';
 import AppFooter from './AppFooter';
 import { ReportDashboard } from './reports';
@@ -49,6 +50,7 @@ const SchoolAdminDashboard = ({ schoolData: initialSchoolData }) => {
   const [selectedClass, setSelectedClass] = useState(null);
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [showStudentEditModal, setShowStudentEditModal] = useState(false);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [showTermModal, setShowTermModal] = useState(false);
   const [editingTerm, setEditingTerm] = useState(null);
@@ -526,13 +528,22 @@ const SchoolAdminDashboard = ({ schoolData: initialSchoolData }) => {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h2 className="text-xl font-bold text-gray-800">Students</h2>
-        <button
-          onClick={() => setShowStudentModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-        >
-          <UserPlus size={18} />
-          Add Student
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowBulkImportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+          >
+            <Upload size={18} />
+            Bulk Import
+          </button>
+          <button
+            onClick={() => setShowStudentModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+          >
+            <UserPlus size={18} />
+            Add Student
+          </button>
+        </div>
       </div>
 
       {/* Search and Filter */}
@@ -919,6 +930,15 @@ const SchoolAdminDashboard = ({ schoolData: initialSchoolData }) => {
           setSelectedStudent(null);
         }}
         student={selectedStudent}
+      />
+
+      <BulkImportStudents
+        isOpen={showBulkImportModal}
+        onClose={() => setShowBulkImportModal(false)}
+        onSuccess={() => {
+          refetchStudents();
+        }}
+        schoolId={schoolData?.id}
       />
 
       {/* Delete Confirmation Modal */}
