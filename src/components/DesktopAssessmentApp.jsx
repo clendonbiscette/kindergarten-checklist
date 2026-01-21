@@ -112,7 +112,7 @@ const DesktopAssessmentApp = () => {
   const deleteClass = useDeleteClass();
   const deleteStudent = useDeleteStudent();
 
-  // Restore session on mount
+  // Restore session on mount, with user's assigned school/country as fallback
   useEffect(() => {
     const savedSession = getSession();
     if (savedSession) {
@@ -123,30 +123,35 @@ const DesktopAssessmentApp = () => {
       if (savedSession.selectedSubject) setSelectedSubject(savedSession.selectedSubject);
       if (savedSession.selectedStudent) setSelectedStudent(savedSession.selectedStudent);
       if (savedSession.currentView) setCurrentView(savedSession.currentView);
+    } else {
+      // No saved session - use user's assigned school/country from registration/login
+      if (user?.countryId) {
+        setSelectedCountry(user.countryId);
+      }
+      if (user?.schoolId) {
+        setSelectedSchool(user.schoolId);
+      }
     }
-  }, []);
+  }, [user?.countryId, user?.schoolId]);
 
-  // Smart defaults: Auto-select country if only one available
+  // Smart defaults: Auto-select country if only one available (and not already set by user assignment)
   useEffect(() => {
     if (!selectedCountry && countries.length === 1) {
       setSelectedCountry(countries[0].id);
     }
   }, [countries, selectedCountry]);
 
-  // Smart defaults: Auto-select school if only one available or from user assignments
+  // Smart defaults: Auto-select school if only one available (and not already set by user assignment)
   useEffect(() => {
     if (selectedCountry && !selectedSchool) {
-      // Check user's school assignments first
-      const userSchoolIds = user?.assignments?.map(a => a.schoolId) || [];
-      const assignedSchoolsInCountry = schools.filter(s => userSchoolIds.includes(s.id));
-
-      if (assignedSchoolsInCountry.length === 1) {
-        setSelectedSchool(assignedSchoolsInCountry[0].id);
+      // Check if user has an assigned school in this country
+      if (user?.schoolId && schools.some(s => s.id === user.schoolId)) {
+        setSelectedSchool(user.schoolId);
       } else if (schools.length === 1) {
         setSelectedSchool(schools[0].id);
       }
     }
-  }, [schools, selectedCountry, selectedSchool, user?.assignments]);
+  }, [schools, selectedCountry, selectedSchool, user?.schoolId]);
 
   // Smart defaults: Auto-select current/active term
   useEffect(() => {

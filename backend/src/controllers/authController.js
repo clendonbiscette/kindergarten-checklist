@@ -88,9 +88,21 @@ export const login = async (req, res, next) => {
       });
     }
 
-    // Find user
+    // Find user with assignments
     const user = await prisma.user.findUnique({
       where: { email },
+      include: {
+        assignments: {
+          include: {
+            school: {
+              include: {
+                country: true,
+              },
+            },
+            country: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -121,6 +133,10 @@ export const login = async (req, res, next) => {
     // Generate token pair (access + refresh)
     const tokens = generateTokenPair(user.id, user.email, user.role);
 
+    // Extract school and country info from assignments
+    const schoolAssignment = user.assignments?.find(a => a.school);
+    const countryAssignment = user.assignments?.find(a => a.country);
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -131,6 +147,10 @@ export const login = async (req, res, next) => {
           firstName: user.firstName,
           lastName: user.lastName,
           role: user.role,
+          schoolId: schoolAssignment?.school?.id || null,
+          schoolName: schoolAssignment?.school?.name || null,
+          countryId: schoolAssignment?.school?.country?.id || countryAssignment?.country?.id || null,
+          countryName: schoolAssignment?.school?.country?.name || countryAssignment?.country?.name || null,
         },
         token: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -225,9 +245,12 @@ export const registerTeacher = async (req, res, next) => {
       });
     }
 
-    // Verify school exists
+    // Verify school exists and get country info
     const school = await prisma.school.findUnique({
       where: { id: schoolId },
+      include: {
+        country: true,
+      },
     });
 
     if (!school) {
@@ -281,7 +304,13 @@ export const registerTeacher = async (req, res, next) => {
       success: true,
       message: 'Teacher registered and assigned to school successfully',
       data: {
-        user: result,
+        user: {
+          ...result,
+          schoolId: school.id,
+          schoolName: school.name,
+          countryId: school.country.id,
+          countryName: school.country.name,
+        },
         token: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       },
