@@ -31,11 +31,16 @@ export const AuthProvider = ({ children }) => {
         setUser(response.data.user);
         return { success: true };
       }
-      return { success: false, message: response.message };
+      // API returned success: false
+      return { success: false, message: response.message || 'Login failed' };
     } catch (error) {
+      // Error thrown by API client (network error or HTTP error response)
+      // The error object from our API client is {success, message} for HTTP errors
+      // or {success, message: "Network error..."} for network issues
+      const errorMessage = error?.message || (typeof error === 'string' ? error : 'Login failed. Please try again.');
       return {
         success: false,
-        message: error.message || 'Login failed',
+        message: errorMessage,
       };
     }
   };
@@ -50,11 +55,12 @@ export const AuthProvider = ({ children }) => {
         setUser(response.data.user);
         return { success: true };
       }
-      return { success: false, message: response.message };
+      return { success: false, message: response.message || 'Registration failed' };
     } catch (error) {
+      const errorMessage = error?.message || (typeof error === 'string' ? error : 'Registration failed. Please try again.');
       return {
         success: false,
-        message: error.message || 'Registration failed',
+        message: errorMessage,
       };
     }
   };
@@ -66,11 +72,12 @@ export const AuthProvider = ({ children }) => {
         setUser(response.data.user);
         return { success: true };
       }
-      return { success: false, message: response.message };
+      return { success: false, message: response.message || 'Registration failed' };
     } catch (error) {
+      const errorMessage = error?.message || (typeof error === 'string' ? error : 'Registration failed. Please try again.');
       return {
         success: false,
-        message: error.message || 'Teacher registration failed',
+        message: errorMessage,
       };
     }
   };
