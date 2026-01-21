@@ -16,6 +16,7 @@ import {
   useResetUserPassword,
   useDeactivateUser,
   useAssignUserToSchool,
+  useCreateSchool,
 } from '../hooks/useAdmin';
 import ConfirmModal from './ConfirmModal';
 import AppFooter from './AppFooter';
@@ -28,6 +29,7 @@ const SuperuserDashboard = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showAssignSchoolModal, setShowAssignSchoolModal] = useState(false);
+  const [showCreateSchoolModal, setShowCreateSchoolModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -53,6 +55,7 @@ const SuperuserDashboard = () => {
   const resetPassword = useResetUserPassword();
   const deactivateUser = useDeactivateUser();
   const assignToSchool = useAssignUserToSchool();
+  const createSchool = useCreateSchool();
 
   const users = usersData?.users || [];
 
@@ -117,6 +120,17 @@ const SuperuserDashboard = () => {
       setShowAssignSchoolModal(false);
       setSelectedUser(null);
       toast.success('User assigned to school successfully');
+      return { success: true };
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  };
+
+  const handleCreateSchool = async (formData) => {
+    try {
+      await createSchool.mutateAsync(formData);
+      setShowCreateSchoolModal(false);
+      toast.success(`School "${formData.name}" created successfully`);
       return { success: true };
     } catch (error) {
       return { success: false, message: error.message };
@@ -386,13 +400,20 @@ const SuperuserDashboard = () => {
           <select
             value={countryFilter}
             onChange={(e) => setCountryFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-md text-sm min-w-[200px]"
+            className="flex-1 px-3 py-2 border border-gray-200 rounded-md text-sm min-w-[200px]"
           >
             <option value="">All Countries</option>
             {countries.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+          <button
+            onClick={() => setShowCreateSchoolModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+          >
+            <Plus size={16} />
+            Add School
+          </button>
         </div>
 
         {/* Schools List */}
@@ -550,6 +571,16 @@ const SuperuserDashboard = () => {
           }}
           onSubmit={(schoolId) => handleAssignSchool(selectedUser.id, schoolId)}
           isLoading={assignToSchool.isPending}
+        />
+      )}
+
+      {/* Create School Modal */}
+      {showCreateSchoolModal && (
+        <CreateSchoolModal
+          countries={countries}
+          onClose={() => setShowCreateSchoolModal(false)}
+          onSubmit={handleCreateSchool}
+          isLoading={createSchool.isPending}
         />
       )}
 
@@ -944,6 +975,124 @@ const AssignSchoolModal = ({ user, schools, countries, onClose, onSubmit, isLoad
               className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
             >
               {isLoading ? 'Assigning...' : 'Assign to School'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Create School Modal Component
+const CreateSchoolModal = ({ countries, onClose, onSubmit, isLoading }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    countryId: '',
+    address: '',
+    phone: '',
+    email: '',
+  });
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!formData.name || !formData.countryId) {
+      setError('School name and country are required');
+      return;
+    }
+    const result = await onSubmit(formData);
+    if (!result.success) {
+      setError(result.message);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg w-full max-w-md">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="font-semibold text-lg">Add New School</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+            <X size={20} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 text-red-700 rounded text-sm">
+              {error}
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">School Name *</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-200 rounded-md"
+              placeholder="Enter school name"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Country *</label>
+            <select
+              value={formData.countryId}
+              onChange={(e) => setFormData({ ...formData, countryId: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-200 rounded-md"
+              required
+            >
+              <option value="">Select a country...</option>
+              {countries.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <input
+              type="text"
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-200 rounded-md"
+              placeholder="School address"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <input
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                placeholder="Phone number"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                placeholder="school@email.com"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-200 rounded-md hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+            >
+              {isLoading ? 'Creating...' : 'Create School'}
             </button>
           </div>
         </form>

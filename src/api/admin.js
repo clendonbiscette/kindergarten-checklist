@@ -49,6 +49,10 @@ export const adminAPI = {
     return apiClient.get(`/admin/schools${queryString ? `?${queryString}` : ''}`);
   },
 
+  createSchool: async (schoolData) => {
+    return apiClient.post('/schools', schoolData);
+  },
+
   // Statistics
   getStats: async () => {
     return apiClient.get('/admin/stats');

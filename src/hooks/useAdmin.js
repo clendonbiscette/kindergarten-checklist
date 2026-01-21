@@ -89,6 +89,19 @@ export const useAdminSchools = (params = {}) => {
   });
 };
 
+export const useCreateSchool = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: adminAPI.createSchool,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'schools'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['schools'] });
+      queryClient.invalidateQueries({ queryKey: ['publicSchools'] });
+    },
+  });
+};
+
 // Statistics
 export const useAdminStats = () => {
   return useQuery({
