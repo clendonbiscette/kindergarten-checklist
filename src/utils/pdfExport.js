@@ -317,7 +317,191 @@ const getRatingSymbol = (rating) => {
   }
 };
 
+/**
+ * Export student-subject detailed report to PDF (matching template format)
+ * Shows all assessments for a student in a specific subject with date columns
+ * @param {Object} reportData - Data from useStudentSubjectReport hook
+ * @param {Object} options - Export options
+ */
+export const exportStudentSubjectReportPDF = (reportData, options = {}) => {
+  const { student, subject, term, assessmentDates, strands, summary } = reportData;
+
+  const doc = new jsPDF({
+    orientation: assessmentDates.length > 3 ? 'landscape' : 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 14;
+
+  // Header
+  doc.setFontSize(18);
+  doc.setFont(undefined, 'bold');
+  doc.text(`${subject.name} Progress Report`, pageWidth / 2, 15, { align: 'center' });
+
+  // Student Info Section
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'normal');
+  let infoY = 25;
+
+  doc.text(`Learner: ${student.firstName} ${student.lastName}`, margin, infoY);
+  doc.text(`Student ID: ${student.studentIdNumber || 'N/A'}`, pageWidth / 2, infoY);
+  infoY += 6;
+
+  doc.text(`Class: ${student.class || 'N/A'}`, margin, infoY);
+  doc.text(`School: ${student.school || 'N/A'}`, pageWidth / 2, infoY);
+  infoY += 6;
+
+  if (term) {
+    doc.text(`Term: ${term.name} (${term.schoolYear})`, margin, infoY);
+  }
+  doc.text(`Generated: ${format(new Date(), 'MMM dd, yyyy')}`, pageWidth / 2, infoY);
+  infoY += 8;
+
+  // Summary Stats
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'bold');
+  doc.text('Summary:', margin, infoY);
+  doc.setFont(undefined, 'normal');
+  doc.text(
+    `Outcomes: ${summary.assessedOutcomes}/${summary.totalOutcomes} (${summary.completionRate}%) | ` +
+    `Performance: ${summary.performanceScore}% | ` +
+    `Ratings: +${summary.ratingDistribution.EASILY_MEETING} =${summary.ratingDistribution.MEETING} x${summary.ratingDistribution.NEEDS_PRACTICE}`,
+    margin + 20,
+    infoY
+  );
+  infoY += 4;
+
+  // Rating Legend
+  doc.setFontSize(9);
+  doc.text('+ = Easily Meeting    = = Meeting    x = Needs Practice', margin, infoY);
+  infoY += 6;
+
+  // Line separator
+  doc.setLineWidth(0.5);
+  doc.line(margin, infoY, pageWidth - margin, infoY);
+  infoY += 5;
+
+  // Build table data
+  const tableHead = [
+    ['SCO No.', 'Outcome', ...assessmentDates.flatMap(date => [
+      format(new Date(date), 'MMM d'),
+      'Comment'
+    ])]
+  ];
+
+  const tableBody = [];
+
+  strands.forEach((strand) => {
+    // Add strand header row
+    const strandRow = [{
+      content: `Strand: ${strand.name}`,
+      colSpan: 2 + assessmentDates.length * 2,
+      styles: { fillColor: [219, 234, 254], fontStyle: 'bold', textColor: [30, 64, 175] }
+    }];
+    tableBody.push(strandRow);
+
+    // Add outcome rows
+    strand.outcomes.forEach((outcome) => {
+      const row = [
+        outcome.code,
+        outcome.description.length > 60
+          ? outcome.description.substring(0, 60) + '...'
+          : outcome.description
+      ];
+
+      assessmentDates.forEach((date) => {
+        const assessment = outcome.assessmentsByDate[date];
+        if (assessment) {
+          row.push(getRatingSymbolShort(assessment.rating));
+          row.push(assessment.comment ?
+            (assessment.comment.length > 20 ? assessment.comment.substring(0, 20) + '...' : assessment.comment)
+            : '');
+        } else {
+          row.push('-');
+          row.push('');
+        }
+      });
+
+      tableBody.push(row);
+    });
+  });
+
+  // If no assessment dates, add placeholder columns
+  if (assessmentDates.length === 0) {
+    tableHead[0].push('Rating', 'Comment');
+    strands.forEach((strand) => {
+      strand.outcomes.forEach((outcome, idx) => {
+        if (idx === 0) {
+          // Find the strand row we already added
+        }
+        const existingRow = tableBody.find(row =>
+          row.length === 2 && row[0] === outcome.code
+        );
+        if (existingRow) {
+          existingRow.push('-', '-');
+        }
+      });
+    });
+  }
+
+  // Create the table
+  doc.autoTable({
+    startY: infoY,
+    head: tableHead,
+    body: tableBody,
+    theme: 'striped',
+    headStyles: {
+      fillColor: [66, 139, 202],
+      fontSize: 8,
+      cellPadding: 2
+    },
+    bodyStyles: {
+      fontSize: 8,
+      cellPadding: 2
+    },
+    columnStyles: {
+      0: { cellWidth: 15 },
+      1: { cellWidth: assessmentDates.length > 3 ? 50 : 70 },
+    },
+    margin: { left: margin, right: margin },
+    didDrawPage: (data) => {
+      // Footer on each page
+      doc.setFontSize(8);
+      doc.text(
+        `Page ${doc.internal.getNumberOfPages()}`,
+        pageWidth / 2,
+        pageHeight - 10,
+        { align: 'center' }
+      );
+    },
+  });
+
+  // Save the PDF
+  const filename = `${student.firstName}_${student.lastName}_${subject.name}_Report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+  doc.save(filename);
+};
+
+/**
+ * Helper to get short rating symbol for PDF
+ */
+const getRatingSymbolShort = (rating) => {
+  switch (rating) {
+    case 'EASILY_MEETING':
+      return '+';
+    case 'MEETING':
+      return '=';
+    case 'NEEDS_PRACTICE':
+      return 'x';
+    default:
+      return '-';
+  }
+};
+
 export default {
   exportStudentReportPDF,
-  exportClassSummaryPDF
+  exportClassSummaryPDF,
+  exportStudentSubjectReportPDF
 };

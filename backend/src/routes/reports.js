@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   getStudentReport,
+  getStudentSubjectReport,
   getStrandReport,
   getOutcomeReport,
   getClassSummary,
@@ -21,6 +22,15 @@ router.get(
   validateUuidParam('studentId'),
   verifyStudentAccess,
   getStudentReport
+);
+
+// Student-Subject detailed report (matching template format with date columns)
+router.get(
+  '/student/:studentId/subject/:subjectId',
+  validateUuidParam('studentId'),
+  validateUuidParam('subjectId'),
+  verifyStudentAccess,
+  getStudentSubjectReport
 );
 
 // Strand report (By Strand) - Teachers can access their class, Admins can access any class in school

@@ -740,6 +740,169 @@ export const getSchoolSummary = async (req, res, next) => {
   }
 };
 
+// Get detailed student-subject report (matching template format)
+// Shows all assessments for a student in a specific subject, organized by strand with date columns
+export const getStudentSubjectReport = async (req, res, next) => {
+  try {
+    const { studentId, subjectId } = req.params;
+    const { termId } = req.query;
+
+    // Get student info
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        school: { select: { name: true } },
+        class: { select: { name: true, gradeLevel: true } },
+      },
+    });
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+      });
+    }
+
+    // Get subject info
+    const subject = await prisma.subject.findUnique({
+      where: { id: subjectId },
+      include: {
+        strands: {
+          orderBy: { displayOrder: 'asc' },
+          include: {
+            learningOutcomes: {
+              orderBy: { displayOrder: 'asc' },
+              select: {
+                id: true,
+                code: true,
+                description: true,
+                displayOrder: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!subject) {
+      return res.status(404).json({
+        success: false,
+        message: 'Subject not found',
+      });
+    }
+
+    // Build where clause for assessments
+    const where = {
+      studentId,
+      learningOutcome: { subjectId },
+    };
+    if (termId) {
+      where.termId = termId;
+    }
+
+    // Get all assessments for this student in this subject
+    const assessments = await prisma.assessment.findMany({
+      where,
+      include: {
+        learningOutcome: {
+          select: { id: true, code: true },
+        },
+        term: { select: { name: true, schoolYear: true } },
+      },
+      orderBy: { assessmentDate: 'asc' },
+    });
+
+    // Get term info if specified
+    let termInfo = null;
+    if (termId) {
+      termInfo = await prisma.term.findUnique({
+        where: { id: termId },
+        select: { name: true, schoolYear: true, startDate: true, endDate: true },
+      });
+    }
+
+    // Get unique assessment dates for column headers
+    const uniqueDates = [...new Set(
+      assessments.map(a => a.assessmentDate.toISOString().split('T')[0])
+    )].sort();
+
+    // Organize data by strand and outcome
+    const strandData = subject.strands.map((strand) => {
+      const outcomes = strand.learningOutcomes.map((outcome) => {
+        // Get all assessments for this outcome
+        const outcomeAssessments = assessments.filter(
+          (a) => a.learningOutcomeId === outcome.id
+        );
+
+        // Create date-keyed map of assessments
+        const assessmentsByDate = {};
+        outcomeAssessments.forEach((a) => {
+          const dateKey = a.assessmentDate.toISOString().split('T')[0];
+          assessmentsByDate[dateKey] = {
+            rating: a.rating,
+            comment: a.comment || '',
+          };
+        });
+
+        return {
+          id: outcome.id,
+          code: outcome.code,
+          description: outcome.description,
+          assessmentsByDate,
+        };
+      });
+
+      return {
+        id: strand.id,
+        name: strand.name,
+        outcomes,
+      };
+    });
+
+    // Calculate summary statistics
+    const ratingDistribution = calculateRatingDistribution(assessments);
+    const performanceScore = calculatePerformanceScore(assessments);
+    const totalOutcomes = subject.strands.reduce(
+      (sum, strand) => sum + strand.learningOutcomes.length,
+      0
+    );
+    const assessedOutcomeIds = new Set(assessments.map((a) => a.learningOutcomeId));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        student: {
+          id: student.id,
+          firstName: student.firstName,
+          lastName: student.lastName,
+          studentIdNumber: student.studentIdNumber,
+          school: student.school?.name,
+          class: student.class?.name,
+          gradeLevel: student.class?.gradeLevel,
+        },
+        subject: {
+          id: subject.id,
+          name: subject.name,
+        },
+        term: termInfo,
+        assessmentDates: uniqueDates,
+        strands: strandData,
+        summary: {
+          totalOutcomes,
+          assessedOutcomes: assessedOutcomeIds.size,
+          completionRate: totalOutcomes
+            ? Math.round((assessedOutcomeIds.size / totalOutcomes) * 100)
+            : 0,
+          ratingDistribution,
+          performanceScore,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Export report to CSV or PDF
 export const exportReport = async (req, res, next) => {
   try {

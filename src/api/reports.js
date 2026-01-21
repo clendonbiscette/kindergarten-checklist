@@ -6,6 +6,11 @@ export const reportsAPI = {
     return apiClient.get(`/reports/student/${studentId}`, { params });
   },
 
+  // Get detailed student-subject report (matching template format with date columns)
+  getStudentSubjectReport: async (studentId, subjectId, params = {}) => {
+    return apiClient.get(`/reports/student/${studentId}/subject/${subjectId}`, { params });
+  },
+
   // Get strand report (By Strand)
   getStrandReport: async (strandId, params = {}) => {
     return apiClient.get(`/reports/strand/${strandId}`, { params });

@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import { User, BookOpen, Target, Download, ArrowLeft } from 'lucide-react';
+import { User, BookOpen, Target, Download, ArrowLeft, FileText } from 'lucide-react';
 import ReportFilters from './ReportFilters';
 import StudentReport from './StudentReport';
+import StudentSubjectReport from './StudentSubjectReport';
 import StrandReport from './StrandReport';
 import OutcomeReport from './OutcomeReport';
 import ReportExport from './ReportExport';
-import { useStudentReport, useStrandReport, useOutcomeReport } from '../../hooks/useReports';
+import { useStudentReport, useStudentSubjectReport, useStrandReport, useOutcomeReport } from '../../hooks/useReports';
+import { exportStudentSubjectReportPDF } from '../../utils/pdfExport';
 
 const REPORT_TYPES = {
   STUDENT: 'student',
+  STUDENT_SUBJECT: 'student-subject',
   STRAND: 'strand',
   OUTCOME: 'outcome',
 };
@@ -25,6 +28,7 @@ const ReportDashboard = ({
 }) => {
   const [reportType, setReportType] = useState(null);
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [selectedStrandId, setSelectedStrandId] = useState('');
   const [selectedOutcomeId, setSelectedOutcomeId] = useState('');
   const [selectedClassId, setSelectedClassId] = useState(defaultClassId);
@@ -34,6 +38,13 @@ const ReportDashboard = ({
   // Fetch report data
   const studentReport = useStudentReport(
     reportType === REPORT_TYPES.STUDENT ? selectedStudentId : null,
+    { termId: selectedTermId }
+  );
+
+  // Fetch detailed student-subject report (matching template format)
+  const studentSubjectReport = useStudentSubjectReport(
+    reportType === REPORT_TYPES.STUDENT_SUBJECT ? selectedStudentId : null,
+    reportType === REPORT_TYPES.STUDENT_SUBJECT ? selectedSubjectId : null,
     { termId: selectedTermId }
   );
 
@@ -51,6 +62,7 @@ const ReportDashboard = ({
     setReportType(type);
     // Reset selections when changing report type
     setSelectedStudentId('');
+    setSelectedSubjectId('');
     setSelectedStrandId('');
     setSelectedOutcomeId('');
   };
@@ -58,14 +70,24 @@ const ReportDashboard = ({
   const handleBack = () => {
     setReportType(null);
     setSelectedStudentId('');
+    setSelectedSubjectId('');
     setSelectedStrandId('');
     setSelectedOutcomeId('');
+  };
+
+  // Handle PDF export for student-subject report
+  const handleExportStudentSubjectPDF = () => {
+    if (studentSubjectReport.data) {
+      exportStudentSubjectReportPDF(studentSubjectReport.data);
+    }
   };
 
   const getCurrentReportData = () => {
     switch (reportType) {
       case REPORT_TYPES.STUDENT:
         return studentReport.data;
+      case REPORT_TYPES.STUDENT_SUBJECT:
+        return studentSubjectReport.data;
       case REPORT_TYPES.STRAND:
         return strandReport.data;
       case REPORT_TYPES.OUTCOME:
@@ -78,6 +100,7 @@ const ReportDashboard = ({
   const canExport = () => {
     return (
       (reportType === REPORT_TYPES.STUDENT && studentReport.data) ||
+      (reportType === REPORT_TYPES.STUDENT_SUBJECT && studentSubjectReport.data) ||
       (reportType === REPORT_TYPES.STRAND && strandReport.data) ||
       (reportType === REPORT_TYPES.OUTCOME && outcomeReport.data)
     );
@@ -113,7 +136,23 @@ const ReportDashboard = ({
         />
 
         {/* Report Type Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <button
+            onClick={() => handleSelectReportType(REPORT_TYPES.STUDENT_SUBJECT)}
+            className="bg-white rounded-lg shadow-sm p-6 text-left hover:shadow-md hover:border-indigo-300 border-2 border-transparent transition-all group"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-3 bg-indigo-100 rounded-lg group-hover:bg-indigo-200 transition-colors">
+                <FileText size={24} className="text-indigo-600" />
+              </div>
+              <h3 className="font-semibold text-lg text-gray-800">Detailed Report</h3>
+            </div>
+            <p className="text-sm text-gray-600">
+              View a student's complete assessment history for one subject with dates,
+              ratings (+/=/x), and comments. Perfect for downloadable progress reports.
+            </p>
+          </button>
+
           <button
             onClick={() => handleSelectReportType(REPORT_TYPES.STUDENT)}
             className="bg-white rounded-lg shadow-sm p-6 text-left hover:shadow-md hover:border-blue-300 border-2 border-transparent transition-all group"
@@ -214,6 +253,47 @@ const ReportDashboard = ({
       </div>
 
       {/* Report-specific Selection */}
+      {reportType === REPORT_TYPES.STUDENT_SUBJECT && (
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Student
+              </label>
+              <select
+                value={selectedStudentId}
+                onChange={(e) => setSelectedStudentId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:border-blue-300"
+              >
+                <option value="">Choose a student...</option>
+                {filteredStudents.map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.firstName} {student.lastName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Subject
+              </label>
+              <select
+                value={selectedSubjectId}
+                onChange={(e) => setSelectedSubjectId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:border-blue-300"
+              >
+                <option value="">Choose a subject...</option>
+                {subjects.map((subject) => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
       {reportType === REPORT_TYPES.STUDENT && (
         <div className="bg-white rounded-lg shadow-sm p-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -334,6 +414,15 @@ const ReportDashboard = ({
       )}
 
       {/* Report Content */}
+      {reportType === REPORT_TYPES.STUDENT_SUBJECT && (
+        <StudentSubjectReport
+          data={studentSubjectReport.data}
+          isLoading={studentSubjectReport.isLoading}
+          error={studentSubjectReport.error}
+          onExportPDF={handleExportStudentSubjectPDF}
+        />
+      )}
+
       {reportType === REPORT_TYPES.STUDENT && (
         <StudentReport
           data={studentReport.data?.data}

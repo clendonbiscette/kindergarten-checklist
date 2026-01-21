@@ -11,6 +11,16 @@ export const useStudentReport = (studentId, filters = {}) => {
   });
 };
 
+// Get detailed student-subject report (matching template format with date columns)
+export const useStudentSubjectReport = (studentId, subjectId, filters = {}) => {
+  return useQuery({
+    queryKey: ['reports', 'student-subject', studentId, subjectId, filters],
+    queryFn: () => reportsAPI.getStudentSubjectReport(studentId, subjectId, filters),
+    enabled: !!(studentId && subjectId),
+    select: (data) => data.data,
+  });
+};
+
 // Get strand report (By Strand)
 export const useStrandReport = (strandId, filters = {}) => {
   return useQuery({
