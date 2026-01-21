@@ -1,12 +1,17 @@
 import apiClient from './client';
 
 export const schoolsAPI = {
-  // Get all countries
+  // Get all countries (public - no auth required)
   getCountries: async () => {
     return apiClient.get('/schools/countries');
   },
 
-  // Get all schools
+  // Get all schools (public - no auth required, for registration)
+  getPublic: async (params = {}) => {
+    return apiClient.get('/schools/public', { params });
+  },
+
+  // Get all schools (authenticated)
   getAll: async (params = {}) => {
     return apiClient.get('/schools', { params });
   },

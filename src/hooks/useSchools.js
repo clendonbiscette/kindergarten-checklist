@@ -10,11 +10,20 @@ export const useCountries = () => {
   });
 };
 
-// Get all schools
+// Get all schools (authenticated)
 export const useSchools = (filters = {}) => {
   return useQuery({
     queryKey: ['schools', filters],
     queryFn: () => schoolsAPI.getAll(filters),
+    select: (data) => data.data,
+  });
+};
+
+// Get all schools (public - no auth required, for registration)
+export const usePublicSchools = (filters = {}) => {
+  return useQuery({
+    queryKey: ['publicSchools', filters],
+    queryFn: () => schoolsAPI.getPublic(filters),
     select: (data) => data.data,
   });
 };

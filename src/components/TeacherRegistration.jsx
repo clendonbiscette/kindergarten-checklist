@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useCountries, useSchools } from '../hooks/useSchools';
+import { useCountries, usePublicSchools } from '../hooks/useSchools';
 
 const TeacherRegistration = ({ onBackToLogin }) => {
   const [formData, setFormData] = useState({
@@ -17,7 +17,7 @@ const TeacherRegistration = ({ onBackToLogin }) => {
   const { registerTeacher } = useAuth();
 
   const { data: countries = [], isLoading: countriesLoading } = useCountries();
-  const { data: schools = [], isLoading: schoolsLoading } = useSchools(
+  const { data: schools = [], isLoading: schoolsLoading } = usePublicSchools(
     formData.countryId ? { countryId: formData.countryId } : {}
   );
 

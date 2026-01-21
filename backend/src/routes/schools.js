@@ -14,11 +14,12 @@ import { authenticate, authorize, verifySchoolAccess } from '../middleware/auth.
 
 const router = express.Router();
 
-// All routes require authentication
-router.use(authenticate);
-
-// Countries
+// Public routes (for registration page)
 router.get('/countries', getCountries);
+router.get('/public', getSchools);
+
+// All routes below require authentication
+router.use(authenticate);
 
 // My School (for School Admin onboarding and management)
 router.get('/my-school', authorize('SCHOOL_ADMIN'), getMySchool);
