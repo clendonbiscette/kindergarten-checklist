@@ -387,7 +387,7 @@ const ReportDashboard = ({
                 <option value="">All strands</option>
                 {strands.map((strand) => (
                   <option key={strand.id} value={strand.id}>
-                    {strand.name}
+                    {strand.name} ({strand.subject?.name})
                   </option>
                 ))}
               </select>
