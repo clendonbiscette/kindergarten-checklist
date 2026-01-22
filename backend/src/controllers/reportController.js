@@ -922,7 +922,7 @@ export const exportReport = async (req, res, next) => {
       });
     }
 
-    if (!['student', 'strand', 'outcome', 'class', 'school'].includes(reportType)) {
+    if (!['student', 'student-subject', 'strand', 'outcome', 'class', 'school'].includes(reportType)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid reportType',

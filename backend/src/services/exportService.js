@@ -17,7 +17,7 @@ const RATING_LABELS = {
 /**
  * Generate CSV from report data
  * @param {Object} reportData - The report data to export
- * @param {string} reportType - Type of report (student, strand, outcome, class, school)
+ * @param {string} reportType - Type of report (student, student-subject, strand, outcome, class, school)
  * @returns {Promise<Buffer>} CSV file as buffer
  */
 export const generateCSV = async (reportData, reportType) => {
@@ -42,6 +42,8 @@ const formatDataForCSV = (data, reportType) => {
   switch (reportType) {
     case 'student':
       return formatStudentReportCSV(data);
+    case 'student-subject':
+      return formatStudentSubjectReportCSV(data);
     case 'strand':
       return formatStrandReportCSV(data);
     case 'outcome':
@@ -55,112 +57,202 @@ const formatDataForCSV = (data, reportType) => {
   }
 };
 
+// Format student report (By Learner) - matches getStudentReport API response
 const formatStudentReportCSV = (data) => {
   const rows = [];
 
   // Add student info as header row
   rows.push({
     Subject: `Student: ${data.student.firstName} ${data.student.lastName}`,
-    Strand: '',
-    Outcome: '',
-    Rating: '',
-    Date: '',
-    Comment: '',
+    Strand: `Class: ${data.student.class || 'N/A'}`,
+    'Performance Score': `Overall: ${data.overallStats?.performanceScore || 0}%`,
+    'Completion Rate': `${data.overallStats?.completionRate || 0}%`,
+    'Total Assessments': data.overallStats?.totalAssessments || 0,
   });
 
-  // Add assessment data
-  data.subjects.forEach((subject) => {
-    subject.strands.forEach((strand) => {
-      strand.outcomes.forEach((outcome) => {
-        rows.push({
-          Subject: subject.name,
-          Strand: strand.name,
-          Outcome: outcome.code,
-          Rating: outcome.latestRating ? RATING_LABELS[outcome.latestRating] : 'Not Assessed',
-          Date: outcome.assessedAt || '',
-          Comment: outcome.comment || '',
-        });
-      });
-    });
+  // Add empty separator row
+  rows.push({
+    Subject: '',
+    Strand: '',
+    'Performance Score': '',
+    'Completion Rate': '',
+    'Total Assessments': '',
   });
+
+  // Add subject breakdown
+  if (data.subjects && Array.isArray(data.subjects)) {
+    data.subjects.forEach((subject) => {
+      rows.push({
+        Subject: subject.subjectName,
+        Strand: '',
+        'Performance Score': `${subject.performanceScore}%`,
+        'Completion Rate': `${subject.completionRate}%`,
+        'Total Assessments': subject.assessments?.length || 0,
+      });
+
+      // Add strand breakdown within subject
+      if (subject.strands && Array.isArray(subject.strands)) {
+        subject.strands.forEach((strand) => {
+          rows.push({
+            Subject: '',
+            Strand: `  ${strand.strandName}`,
+            'Performance Score': `${strand.performanceScore}%`,
+            'Completion Rate': '',
+            'Total Assessments': strand.assessments?.length || 0,
+          });
+        });
+      }
+    });
+  }
 
   return rows;
 };
 
+// Format student-subject report (Detailed Report) - matches getStudentSubjectReport API response
+const formatStudentSubjectReportCSV = (data) => {
+  const rows = [];
+
+  // Header info
+  rows.push({
+    Strand: `Student: ${data.student.firstName} ${data.student.lastName}`,
+    'Outcome Code': `Subject: ${data.subject?.name || 'N/A'}`,
+    Description: `Class: ${data.student.class || 'N/A'}`,
+    Rating: '',
+    Date: '',
+  });
+
+  rows.push({
+    Strand: '',
+    'Outcome Code': '',
+    Description: '',
+    Rating: '',
+    Date: '',
+  });
+
+  // Add strands and outcomes
+  if (data.strands && Array.isArray(data.strands)) {
+    data.strands.forEach((strand) => {
+      // Strand header
+      rows.push({
+        Strand: strand.name,
+        'Outcome Code': '',
+        Description: '',
+        Rating: '',
+        Date: '',
+      });
+
+      // Outcomes within strand
+      if (strand.outcomes && Array.isArray(strand.outcomes)) {
+        strand.outcomes.forEach((outcome) => {
+          // Get the most recent assessment date and rating
+          const dates = Object.keys(outcome.assessmentsByDate || {}).sort().reverse();
+          const latestDate = dates[0] || '';
+          const latestAssessment = outcome.assessmentsByDate?.[latestDate];
+
+          rows.push({
+            Strand: '',
+            'Outcome Code': outcome.code,
+            Description: outcome.description,
+            Rating: latestAssessment?.rating ? RATING_LABELS[latestAssessment.rating] : 'Not Assessed',
+            Date: latestDate,
+          });
+        });
+      }
+    });
+  }
+
+  return rows;
+};
+
+// Format strand report (By Strand) - matches getStrandReport API response
 const formatStrandReportCSV = (data) => {
   const rows = [];
 
   // Header with strand info
+  const outcomeHeaders = data.outcomes?.reduce((acc, o) => ({ ...acc, [o.code]: '' }), {}) || {};
   rows.push({
-    Student: `Strand: ${data.strand.name}`,
-    ...data.outcomes.reduce((acc, o) => ({ ...acc, [o.code]: '' }), {}),
+    Student: `Strand: ${data.strand?.name || 'N/A'} (${data.strand?.subjectName || ''})`,
+    ...outcomeHeaders,
     'Performance Score': '',
   });
 
-  // Student rows
-  data.students.forEach((student) => {
-    const row = {
-      Student: `${student.firstName} ${student.lastName}`,
-    };
+  // Student rows from studentMatrix
+  if (data.studentMatrix && Array.isArray(data.studentMatrix)) {
+    data.studentMatrix.forEach((item) => {
+      const row = {
+        Student: `${item.student.firstName} ${item.student.lastName}`,
+      };
 
-    // Add rating for each outcome
-    data.outcomes.forEach((outcome) => {
-      const assessment = student.assessments.find(
-        (a) => a.learningOutcomeId === outcome.id
-      );
-      row[outcome.code] = assessment ? RATING_SYMBOLS[assessment.rating] : '-';
+      // Add rating for each outcome
+      if (data.outcomes && Array.isArray(data.outcomes)) {
+        data.outcomes.forEach((outcome) => {
+          const rating = item.outcomeRatings?.[outcome.id];
+          row[outcome.code] = rating ? RATING_SYMBOLS[rating] : '-';
+        });
+      }
+
+      row['Performance Score'] = `${item.performanceScore}%`;
+      rows.push(row);
     });
-
-    row['Performance Score'] = `${student.performanceScore}%`;
-    rows.push(row);
-  });
+  }
 
   return rows;
 };
 
+// Format outcome report (By SCO) - matches getOutcomeReport API response
 const formatOutcomeReportCSV = (data) => {
   const rows = [];
 
   // Add outcome info
   rows.push({
-    Student: `Outcome: ${data.outcome.code} - ${data.outcome.description}`,
+    Student: `Outcome: ${data.outcome?.code || 'N/A'} - ${data.outcome?.description || ''}`,
     Rating: '',
     Date: '',
     Comment: '',
   });
 
-  // Student assessments
-  data.students.forEach((student) => {
-    rows.push({
-      Student: `${student.firstName} ${student.lastName}`,
-      Rating: student.rating ? RATING_LABELS[student.rating] : 'Not Assessed',
-      Date: student.assessedAt || '',
-      Comment: student.comment || '',
-    });
+  rows.push({
+    Student: '',
+    Rating: '',
+    Date: '',
+    Comment: '',
   });
+
+  // Student results
+  if (data.studentResults && Array.isArray(data.studentResults)) {
+    data.studentResults.forEach((result) => {
+      rows.push({
+        Student: `${result.student.firstName} ${result.student.lastName}`,
+        Rating: result.latestRating ? RATING_LABELS[result.latestRating] : 'Not Assessed',
+        Date: result.latestDate ? new Date(result.latestDate).toLocaleDateString() : '',
+        Comment: result.latestComment || '',
+      });
+    });
+  }
 
   return rows;
 };
 
+// Format class summary - matches getClassSummary API response
 const formatClassSummaryCSV = (data) => {
   const rows = [];
 
   // Summary info
   rows.push({
     Metric: 'Class Summary',
-    Value: data.class.name,
+    Value: data.class?.name || 'N/A',
   });
   rows.push({
     Metric: 'Total Students',
-    Value: data.totalStudents,
+    Value: data.overallStats?.studentCount || 0,
   });
   rows.push({
     Metric: 'Total Assessments',
-    Value: data.totalAssessments,
+    Value: data.overallStats?.totalAssessments || 0,
   });
   rows.push({
-    Metric: 'Average Performance',
-    Value: `${data.averagePerformance}%`,
+    Metric: 'Performance Score',
+    Value: `${data.overallStats?.performanceScore || 0}%`,
   });
 
   // Rating distribution
@@ -168,46 +260,49 @@ const formatClassSummaryCSV = (data) => {
   rows.push({ Metric: 'Rating Distribution', Value: '' });
   rows.push({
     Metric: 'Easily Meeting (+)',
-    Value: data.ratingDistribution.EASILY_MEETING,
+    Value: data.overallStats?.ratingDistribution?.EASILY_MEETING || 0,
   });
   rows.push({
     Metric: 'Meeting (=)',
-    Value: data.ratingDistribution.MEETING,
+    Value: data.overallStats?.ratingDistribution?.MEETING || 0,
   });
   rows.push({
     Metric: 'Needs Practice (x)',
-    Value: data.ratingDistribution.NEEDS_PRACTICE,
+    Value: data.overallStats?.ratingDistribution?.NEEDS_PRACTICE || 0,
   });
 
   return rows;
 };
 
+// Format school summary - matches getSchoolSummary API response
 const formatSchoolSummaryCSV = (data) => {
   const rows = [];
 
   // School summary
   rows.push({
     Class: 'School Summary',
-    Students: data.totalStudents,
-    Assessments: data.totalAssessments,
-    'Avg Performance': `${data.averagePerformance}%`,
-    '+': '',
-    '=': '',
-    'x': '',
+    Students: data.overallStats?.studentCount || 0,
+    Assessments: data.overallStats?.totalAssessments || 0,
+    'Avg Performance': `${data.overallStats?.performanceScore || 0}%`,
+    '+': data.overallStats?.ratingDistribution?.EASILY_MEETING || 0,
+    '=': data.overallStats?.ratingDistribution?.MEETING || 0,
+    'x': data.overallStats?.ratingDistribution?.NEEDS_PRACTICE || 0,
   });
 
   // Class breakdown
-  data.classes.forEach((cls) => {
-    rows.push({
-      Class: cls.name,
-      Students: cls.studentCount,
-      Assessments: cls.assessmentCount,
-      'Avg Performance': `${cls.averagePerformance}%`,
-      '+': cls.ratingDistribution.EASILY_MEETING,
-      '=': cls.ratingDistribution.MEETING,
-      'x': cls.ratingDistribution.NEEDS_PRACTICE,
+  if (data.classStats && Array.isArray(data.classStats)) {
+    data.classStats.forEach((cls) => {
+      rows.push({
+        Class: cls.className,
+        Students: cls.studentCount,
+        Assessments: cls.totalAssessments,
+        'Avg Performance': `${cls.performanceScore}%`,
+        '+': cls.ratingDistribution?.EASILY_MEETING || 0,
+        '=': cls.ratingDistribution?.MEETING || 0,
+        'x': cls.ratingDistribution?.NEEDS_PRACTICE || 0,
+      });
     });
-  });
+  }
 
   return rows;
 };
@@ -232,6 +327,9 @@ export const generatePDF = async (reportData, reportType, options = {}) => {
     switch (reportType) {
       case 'student':
         generateStudentPDF(doc, reportData, options);
+        break;
+      case 'student-subject':
+        generateStudentSubjectPDF(doc, reportData, options);
         break;
       case 'strand':
         generateStrandPDF(doc, reportData, options);
@@ -269,189 +367,252 @@ const addRatingLegend = (doc) => {
   doc.moveDown();
 };
 
+// Generate student PDF (By Learner) - matches getStudentReport API response
 const generateStudentPDF = (doc, data, options) => {
-  const studentName = `${data.student.firstName} ${data.student.lastName}`;
+  const studentName = `${data.student?.firstName || ''} ${data.student?.lastName || ''}`;
   addHeader(doc, 'Student Performance Report', studentName);
 
-  if (data.term) {
-    doc.fontSize(10).text(`Term: ${data.term.name} (${data.term.schoolYear})`, { align: 'center' });
-    doc.moveDown();
+  if (data.student?.class) {
+    doc.fontSize(10).text(`Class: ${data.student.class}`, { align: 'center' });
   }
+  doc.moveDown();
 
   addRatingLegend(doc);
 
   // Summary stats
   doc.fontSize(12).font('Helvetica-Bold').text('Summary');
   doc.font('Helvetica').fontSize(10);
-  doc.text(`Total Assessments: ${data.summary.totalAssessments}`);
-  doc.text(`Performance Score: ${data.summary.performanceScore}%`);
+  doc.text(`Total Assessments: ${data.overallStats?.totalAssessments || 0}`);
+  doc.text(`Performance Score: ${data.overallStats?.performanceScore || 0}%`);
+  doc.text(`Completion Rate: ${data.overallStats?.completionRate || 0}%`);
   doc.moveDown();
 
   // Subjects breakdown
-  data.subjects.forEach((subject) => {
-    doc.fontSize(14).font('Helvetica-Bold').text(subject.name);
-    doc.moveDown(0.5);
-
-    subject.strands.forEach((strand) => {
-      doc.fontSize(11).font('Helvetica-Bold').text(`  ${strand.name}`);
-
-      strand.outcomes.forEach((outcome) => {
-        const rating = outcome.latestRating ? RATING_SYMBOLS[outcome.latestRating] : '-';
-        doc.fontSize(10).font('Helvetica')
-          .text(`    ${outcome.code}: [${rating}] ${outcome.description.substring(0, 50)}...`);
-      });
+  if (data.subjects && Array.isArray(data.subjects)) {
+    data.subjects.forEach((subject) => {
+      doc.fontSize(14).font('Helvetica-Bold').text(subject.subjectName);
+      doc.fontSize(10).font('Helvetica')
+        .text(`Performance: ${subject.performanceScore}% | Completion: ${subject.completionRate}%`);
       doc.moveDown(0.5);
+
+      if (subject.strands && Array.isArray(subject.strands)) {
+        subject.strands.forEach((strand) => {
+          doc.fontSize(11).font('Helvetica-Bold').text(`  ${strand.strandName}`);
+          doc.fontSize(10).font('Helvetica')
+            .text(`    Performance: ${strand.performanceScore}%`);
+        });
+      }
+      doc.moveDown();
     });
-    doc.moveDown();
-  });
+  }
 };
 
-const generateStrandPDF = (doc, data, options) => {
-  addHeader(doc, 'Strand Report', data.strand.name);
+// Generate student-subject PDF (Detailed Report)
+const generateStudentSubjectPDF = (doc, data, options) => {
+  const studentName = `${data.student?.firstName || ''} ${data.student?.lastName || ''}`;
+  addHeader(doc, 'Detailed Student Report', studentName);
 
-  if (data.class) {
+  doc.fontSize(10).text(`Subject: ${data.subject?.name || 'N/A'}`, { align: 'center' });
+  if (data.student?.class) {
+    doc.text(`Class: ${data.student.class}`, { align: 'center' });
+  }
+  doc.moveDown();
+
+  addRatingLegend(doc);
+
+  // Summary
+  doc.fontSize(12).font('Helvetica-Bold').text('Summary');
+  doc.font('Helvetica').fontSize(10);
+  doc.text(`Outcomes Assessed: ${data.summary?.assessedOutcomes || 0}/${data.summary?.totalOutcomes || 0}`);
+  doc.text(`Completion Rate: ${data.summary?.completionRate || 0}%`);
+  doc.text(`Performance Score: ${data.summary?.performanceScore || 0}%`);
+  doc.moveDown();
+
+  // Strands and outcomes
+  if (data.strands && Array.isArray(data.strands)) {
+    data.strands.forEach((strand) => {
+      doc.fontSize(12).font('Helvetica-Bold').text(strand.name);
+      doc.moveDown(0.5);
+
+      if (strand.outcomes && Array.isArray(strand.outcomes)) {
+        strand.outcomes.forEach((outcome) => {
+          const dates = Object.keys(outcome.assessmentsByDate || {}).sort().reverse();
+          const latestDate = dates[0] || '';
+          const latestAssessment = outcome.assessmentsByDate?.[latestDate];
+          const rating = latestAssessment?.rating ? RATING_SYMBOLS[latestAssessment.rating] : '-';
+
+          doc.fontSize(10).font('Helvetica')
+            .text(`  [${rating}] ${outcome.code}: ${outcome.description.substring(0, 60)}${outcome.description.length > 60 ? '...' : ''}`);
+        });
+      }
+      doc.moveDown();
+    });
+  }
+};
+
+// Generate strand PDF (By Strand) - matches getStrandReport API response
+const generateStrandPDF = (doc, data, options) => {
+  addHeader(doc, 'Strand Report', data.strand?.name || 'N/A');
+
+  if (data.strand?.subjectName) {
+    doc.fontSize(10).text(`Subject: ${data.strand.subjectName}`, { align: 'center' });
+  }
+  if (data.class?.name) {
     doc.fontSize(10).text(`Class: ${data.class.name}`, { align: 'center' });
   }
   doc.moveDown();
 
   addRatingLegend(doc);
 
+  // Overall stats
+  doc.fontSize(12).font('Helvetica-Bold').text('Summary');
+  doc.font('Helvetica').fontSize(10);
+  doc.text(`Total Students: ${data.overallStats?.totalStudents || 0}`);
+  doc.text(`Average Completion: ${data.overallStats?.averageCompletion || 0}%`);
+  doc.text(`Performance Score: ${data.overallStats?.performanceScore || 0}%`);
+  doc.moveDown();
+
   // Create a simple table layout
   const startY = doc.y;
-  const colWidth = 60;
-  const rowHeight = 20;
+  const colWidth = 50;
+  const rowHeight = 18;
+  const maxOutcomes = Math.min(data.outcomes?.length || 0, 6); // Limit columns for PDF
 
   // Headers
-  doc.fontSize(9).font('Helvetica-Bold');
+  doc.fontSize(8).font('Helvetica-Bold');
   doc.text('Student', 50, startY);
 
-  data.outcomes.forEach((outcome, i) => {
-    doc.text(outcome.code, 150 + i * colWidth, startY, { width: colWidth - 5, align: 'center' });
+  (data.outcomes || []).slice(0, maxOutcomes).forEach((outcome, i) => {
+    doc.text(outcome.code, 130 + i * colWidth, startY, { width: colWidth - 5, align: 'center' });
   });
-  doc.text('Score', 150 + data.outcomes.length * colWidth, startY);
+  doc.text('Score', 130 + maxOutcomes * colWidth, startY);
 
   // Student rows
   let y = startY + rowHeight;
-  doc.font('Helvetica').fontSize(9);
+  doc.font('Helvetica').fontSize(8);
 
-  data.students.forEach((student) => {
-    if (y > 700) {
+  (data.studentMatrix || []).forEach((item) => {
+    if (y > 720) {
       doc.addPage();
       y = 50;
     }
 
-    doc.text(`${student.firstName} ${student.lastName.charAt(0)}.`, 50, y);
+    doc.text(`${item.student.firstName} ${item.student.lastName.charAt(0)}.`, 50, y);
 
-    data.outcomes.forEach((outcome, i) => {
-      const assessment = student.assessments.find(
-        (a) => a.learningOutcomeId === outcome.id
-      );
-      const rating = assessment ? RATING_SYMBOLS[assessment.rating] : '-';
-      doc.text(rating, 150 + i * colWidth, y, { width: colWidth - 5, align: 'center' });
+    (data.outcomes || []).slice(0, maxOutcomes).forEach((outcome, i) => {
+      const rating = item.outcomeRatings?.[outcome.id];
+      doc.text(rating ? RATING_SYMBOLS[rating] : '-', 130 + i * colWidth, y, { width: colWidth - 5, align: 'center' });
     });
 
-    doc.text(`${student.performanceScore}%`, 150 + data.outcomes.length * colWidth, y);
+    doc.text(`${item.performanceScore}%`, 130 + maxOutcomes * colWidth, y);
     y += rowHeight;
   });
 };
 
+// Generate outcome PDF (By SCO) - matches getOutcomeReport API response
 const generateOutcomePDF = (doc, data, options) => {
-  addHeader(doc, 'Outcome Report', `${data.outcome.code}: ${data.outcome.description}`);
+  const outcomeTitle = data.outcome?.code ? `${data.outcome.code}: ${data.outcome.description}` : 'N/A';
+  addHeader(doc, 'Outcome Report', outcomeTitle);
 
+  if (data.class?.name) {
+    doc.fontSize(10).text(`Class: ${data.class.name}`, { align: 'center' });
+  }
   doc.moveDown();
+
   addRatingLegend(doc);
 
   // Rating distribution
   doc.fontSize(12).font('Helvetica-Bold').text('Rating Distribution');
   doc.font('Helvetica').fontSize(10);
-  doc.text(`Easily Meeting (+): ${data.ratingDistribution.EASILY_MEETING}`);
-  doc.text(`Meeting (=): ${data.ratingDistribution.MEETING}`);
-  doc.text(`Needs Practice (x): ${data.ratingDistribution.NEEDS_PRACTICE}`);
+  doc.text(`Easily Meeting (+): ${data.overallStats?.ratingDistribution?.EASILY_MEETING || 0}`);
+  doc.text(`Meeting (=): ${data.overallStats?.ratingDistribution?.MEETING || 0}`);
+  doc.text(`Needs Practice (x): ${data.overallStats?.ratingDistribution?.NEEDS_PRACTICE || 0}`);
+  doc.text(`Not Assessed: ${data.overallStats?.notAssessed || 0}`);
   doc.moveDown();
 
   // Student list
   doc.fontSize(12).font('Helvetica-Bold').text('Student Results');
   doc.moveDown(0.5);
 
-  data.students.forEach((student) => {
-    const rating = student.rating ? RATING_SYMBOLS[student.rating] : '-';
+  (data.studentResults || []).forEach((result) => {
+    const rating = result.latestRating ? RATING_SYMBOLS[result.latestRating] : '-';
     doc.fontSize(10).font('Helvetica')
-      .text(`[${rating}] ${student.firstName} ${student.lastName}`);
-    if (student.comment) {
-      doc.fontSize(9).text(`    Comment: ${student.comment}`, { indent: 20 });
+      .text(`[${rating}] ${result.student.firstName} ${result.student.lastName}`);
+    if (result.latestComment) {
+      doc.fontSize(9).text(`    Comment: ${result.latestComment}`, { indent: 20 });
     }
   });
 };
 
+// Generate class summary PDF - matches getClassSummary API response
 const generateClassSummaryPDF = (doc, data, options) => {
-  addHeader(doc, 'Class Summary Report', data.class.name);
+  addHeader(doc, 'Class Summary Report', data.class?.name || 'N/A');
 
-  if (data.term) {
-    doc.fontSize(10).text(`Term: ${data.term.name}`, { align: 'center' });
+  if (data.class?.teacher) {
+    doc.fontSize(10).text(`Teacher: ${data.class.teacher}`, { align: 'center' });
   }
   doc.moveDown();
 
   // Summary stats
   doc.fontSize(12).font('Helvetica-Bold').text('Overview');
   doc.font('Helvetica').fontSize(10);
-  doc.text(`Total Students: ${data.totalStudents}`);
-  doc.text(`Total Assessments: ${data.totalAssessments}`);
-  doc.text(`Average Performance: ${data.averagePerformance}%`);
+  doc.text(`Total Students: ${data.overallStats?.studentCount || 0}`);
+  doc.text(`Total Assessments: ${data.overallStats?.totalAssessments || 0}`);
+  doc.text(`Performance Score: ${data.overallStats?.performanceScore || 0}%`);
+  doc.text(`Completion Rate: ${data.overallStats?.completionRate || 0}%`);
   doc.moveDown();
 
   // Rating distribution
   doc.fontSize(12).font('Helvetica-Bold').text('Rating Distribution');
   doc.font('Helvetica').fontSize(10);
-  doc.text(`Easily Meeting (+): ${data.ratingDistribution.EASILY_MEETING}`);
-  doc.text(`Meeting (=): ${data.ratingDistribution.MEETING}`);
-  doc.text(`Needs Practice (x): ${data.ratingDistribution.NEEDS_PRACTICE}`);
+  doc.text(`Easily Meeting (+): ${data.overallStats?.ratingDistribution?.EASILY_MEETING || 0}`);
+  doc.text(`Meeting (=): ${data.overallStats?.ratingDistribution?.MEETING || 0}`);
+  doc.text(`Needs Practice (x): ${data.overallStats?.ratingDistribution?.NEEDS_PRACTICE || 0}`);
   doc.moveDown();
 
   // Subject breakdown if available
-  if (data.subjectBreakdown && data.subjectBreakdown.length > 0) {
+  if (data.subjectSummary && data.subjectSummary.length > 0) {
     doc.fontSize(12).font('Helvetica-Bold').text('Performance by Subject');
     doc.moveDown(0.5);
 
-    data.subjectBreakdown.forEach((subject) => {
+    data.subjectSummary.forEach((subject) => {
       doc.fontSize(10).font('Helvetica')
-        .text(`${subject.name}: ${subject.averagePerformance}% (${subject.assessmentCount} assessments)`);
+        .text(`${subject.subjectName}: ${subject.performanceScore}% (${subject.totalAssessments} assessments)`);
     });
   }
 };
 
+// Generate school summary PDF - matches getSchoolSummary API response
 const generateSchoolSummaryPDF = (doc, data, options) => {
-  addHeader(doc, 'School Summary Report', data.school.name);
+  addHeader(doc, 'School Summary Report', data.school?.name || 'N/A');
 
-  if (data.term) {
-    doc.fontSize(10).text(`Term: ${data.term.name}`, { align: 'center' });
-  }
   doc.moveDown();
 
   // School-wide stats
   doc.fontSize(12).font('Helvetica-Bold').text('School Overview');
   doc.font('Helvetica').fontSize(10);
-  doc.text(`Total Classes: ${data.classes.length}`);
-  doc.text(`Total Students: ${data.totalStudents}`);
-  doc.text(`Total Assessments: ${data.totalAssessments}`);
-  doc.text(`Average Performance: ${data.averagePerformance}%`);
+  doc.text(`Total Classes: ${data.overallStats?.classCount || 0}`);
+  doc.text(`Total Students: ${data.overallStats?.studentCount || 0}`);
+  doc.text(`Total Assessments: ${data.overallStats?.totalAssessments || 0}`);
+  doc.text(`Performance Score: ${data.overallStats?.performanceScore || 0}%`);
   doc.moveDown();
 
   // Rating distribution
   doc.fontSize(12).font('Helvetica-Bold').text('Overall Rating Distribution');
   doc.font('Helvetica').fontSize(10);
-  doc.text(`Easily Meeting (+): ${data.ratingDistribution.EASILY_MEETING}`);
-  doc.text(`Meeting (=): ${data.ratingDistribution.MEETING}`);
-  doc.text(`Needs Practice (x): ${data.ratingDistribution.NEEDS_PRACTICE}`);
+  doc.text(`Easily Meeting (+): ${data.overallStats?.ratingDistribution?.EASILY_MEETING || 0}`);
+  doc.text(`Meeting (=): ${data.overallStats?.ratingDistribution?.MEETING || 0}`);
+  doc.text(`Needs Practice (x): ${data.overallStats?.ratingDistribution?.NEEDS_PRACTICE || 0}`);
   doc.moveDown();
 
   // Class breakdown
   doc.fontSize(12).font('Helvetica-Bold').text('Class Performance');
   doc.moveDown(0.5);
 
-  data.classes.forEach((cls) => {
-    doc.fontSize(10).font('Helvetica-Bold').text(cls.name);
+  (data.classStats || []).forEach((cls) => {
+    doc.fontSize(10).font('Helvetica-Bold').text(cls.className);
     doc.font('Helvetica').fontSize(9)
-      .text(`  Students: ${cls.studentCount} | Assessments: ${cls.assessmentCount} | Avg: ${cls.averagePerformance}%`);
+      .text(`  Students: ${cls.studentCount} | Assessments: ${cls.totalAssessments} | Score: ${cls.performanceScore}%`);
     doc.moveDown(0.5);
   });
 };
