@@ -99,10 +99,14 @@ export const getLearningOutcomes = async (req, res, next) => {
         strand: {
           select: {
             name: true,
+            displayOrder: true,
           },
         },
       },
-      orderBy: { displayOrder: 'asc' },
+      orderBy: [
+        { strand: { displayOrder: 'asc' } },
+        { displayOrder: 'asc' },
+      ],
     });
 
     res.status(200).json({
