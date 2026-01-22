@@ -121,6 +121,10 @@ const DesktopAssessmentApp = () => {
   const deleteAssessment = useDeleteAssessment();
   const deleteClass = useDeleteClass();
   const deleteStudent = useDeleteStudent();
+  const assignStudentMutation = useAssignStudentToClass();
+
+  // Track which student is being assigned (for loading state)
+  const [assigningStudentId, setAssigningStudentId] = useState(null);
 
   // Restore session on mount, with user's assigned school/country as fallback
   useEffect(() => {
@@ -394,6 +398,19 @@ const DesktopAssessmentApp = () => {
   const handleEditStudent = (student) => {
     setEditingStudent(student);
     setShowStudentEditModal(true);
+  };
+
+  // Direct assign student to class from the unassigned students grid
+  const handleDirectAssign = async (studentId, classId, studentName, className) => {
+    setAssigningStudentId(studentId);
+    try {
+      await assignStudentMutation.mutateAsync({ studentId, classId });
+      toast.success(`${studentName} assigned to ${className}`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to assign student');
+    } finally {
+      setAssigningStudentId(null);
+    }
   };
 
   // Navigation items
@@ -1124,7 +1141,7 @@ const DesktopAssessmentApp = () => {
               Unassigned Students ({students.filter(s => !s.classId).length})
             </h3>
             <p className="text-sm text-gray-500 mb-3">
-              These students are not yet assigned to any class. Select a class above, then use "Add Student to Class" to assign them.
+              These students are not yet assigned to any class. Use the dropdown on each card to assign them directly, or select a class above for bulk actions.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1139,9 +1156,42 @@ const DesktopAssessmentApp = () => {
                   <div className="text-xs text-gray-500 mt-1">
                     ID: {student.studentIdNumber}
                   </div>
-                  <div className="text-xs text-amber-600 mt-1">
-                    Not assigned to a class
-                  </div>
+
+                  {/* Direct assign dropdown */}
+                  {classes.length > 0 ? (
+                    <div className="mt-2">
+                      <select
+                        className="w-full text-xs px-2 py-1.5 border border-amber-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                        defaultValue=""
+                        disabled={assigningStudentId === student.id}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const selectedClass = classes.find(c => c.id === e.target.value);
+                            handleDirectAssign(
+                              student.id,
+                              e.target.value,
+                              `${student.firstName} ${student.lastName}`,
+                              selectedClass?.name || 'class'
+                            );
+                            e.target.value = ''; // Reset after selection
+                          }
+                        }}
+                      >
+                        <option value="">
+                          {assigningStudentId === student.id ? 'Assigning...' : 'Assign to class...'}
+                        </option>
+                        {classes.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.gradeLevel})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-amber-600 mt-2">
+                      No classes available
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
