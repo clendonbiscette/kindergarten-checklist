@@ -910,10 +910,19 @@ export const exportReport = async (req, res, next) => {
   try {
     const { reportType, format: exportFormat, reportData, options } = req.body;
 
+    // Debug logging
+    console.log('Export request received:', {
+      reportType,
+      exportFormat,
+      hasReportData: !!reportData,
+      reportDataKeys: reportData ? Object.keys(reportData) : [],
+    });
+
     if (!reportType || !exportFormat || !reportData) {
       return res.status(400).json({
         success: false,
         message: 'reportType, format, and reportData are required',
+        debug: { reportType, exportFormat, hasReportData: !!reportData },
       });
     }
 

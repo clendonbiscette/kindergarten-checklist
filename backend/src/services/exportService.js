@@ -39,21 +39,32 @@ export const generateCSV = async (reportData, reportType) => {
  * Format report data for CSV based on report type
  */
 const formatDataForCSV = (data, reportType) => {
-  switch (reportType) {
-    case 'student':
-      return formatStudentReportCSV(data);
-    case 'student-subject':
-      return formatStudentSubjectReportCSV(data);
-    case 'strand':
-      return formatStrandReportCSV(data);
-    case 'outcome':
-      return formatOutcomeReportCSV(data);
-    case 'class':
-      return formatClassSummaryCSV(data);
-    case 'school':
-      return formatSchoolSummaryCSV(data);
-    default:
-      return [];
+  // Validate data exists
+  if (!data || typeof data !== 'object') {
+    console.error('Export error: Invalid or missing report data', { data, reportType });
+    return [{ Error: 'No data available for export' }];
+  }
+
+  try {
+    switch (reportType) {
+      case 'student':
+        return formatStudentReportCSV(data);
+      case 'student-subject':
+        return formatStudentSubjectReportCSV(data);
+      case 'strand':
+        return formatStrandReportCSV(data);
+      case 'outcome':
+        return formatOutcomeReportCSV(data);
+      case 'class':
+        return formatClassSummaryCSV(data);
+      case 'school':
+        return formatSchoolSummaryCSV(data);
+      default:
+        return [{ Error: `Unknown report type: ${reportType}` }];
+    }
+  } catch (error) {
+    console.error('Export formatting error:', error);
+    return [{ Error: `Export failed: ${error.message}` }];
   }
 };
 
@@ -61,9 +72,14 @@ const formatDataForCSV = (data, reportType) => {
 const formatStudentReportCSV = (data) => {
   const rows = [];
 
+  // Validate required data
+  if (!data.student) {
+    return [{ Error: 'Missing student data in report' }];
+  }
+
   // Add student info as header row
   rows.push({
-    Subject: `Student: ${data.student.firstName} ${data.student.lastName}`,
+    Subject: `Student: ${data.student.firstName || ''} ${data.student.lastName || ''}`,
     Strand: `Class: ${data.student.class || 'N/A'}`,
     'Performance Score': `Overall: ${data.overallStats?.performanceScore || 0}%`,
     'Completion Rate': `${data.overallStats?.completionRate || 0}%`,
@@ -112,9 +128,14 @@ const formatStudentReportCSV = (data) => {
 const formatStudentSubjectReportCSV = (data) => {
   const rows = [];
 
+  // Validate required data
+  if (!data.student) {
+    return [{ Error: 'Missing student data in report' }];
+  }
+
   // Header info
   rows.push({
-    Strand: `Student: ${data.student.firstName} ${data.student.lastName}`,
+    Strand: `Student: ${data.student.firstName || ''} ${data.student.lastName || ''}`,
     'Outcome Code': `Subject: ${data.subject?.name || 'N/A'}`,
     Description: `Class: ${data.student.class || 'N/A'}`,
     Rating: '',
@@ -168,6 +189,11 @@ const formatStudentSubjectReportCSV = (data) => {
 const formatStrandReportCSV = (data) => {
   const rows = [];
 
+  // Validate required data
+  if (!data.strand) {
+    return [{ Error: 'Missing strand data in report' }];
+  }
+
   // Header with strand info
   const outcomeHeaders = data.outcomes?.reduce((acc, o) => ({ ...acc, [o.code]: '' }), {}) || {};
   rows.push({
@@ -180,7 +206,7 @@ const formatStrandReportCSV = (data) => {
   if (data.studentMatrix && Array.isArray(data.studentMatrix)) {
     data.studentMatrix.forEach((item) => {
       const row = {
-        Student: `${item.student.firstName} ${item.student.lastName}`,
+        Student: `${item.student?.firstName || ''} ${item.student?.lastName || ''}`,
       };
 
       // Add rating for each outcome
@@ -203,6 +229,11 @@ const formatStrandReportCSV = (data) => {
 const formatOutcomeReportCSV = (data) => {
   const rows = [];
 
+  // Validate required data
+  if (!data.outcome) {
+    return [{ Error: 'Missing outcome data in report' }];
+  }
+
   // Add outcome info
   rows.push({
     Student: `Outcome: ${data.outcome?.code || 'N/A'} - ${data.outcome?.description || ''}`,
@@ -222,7 +253,7 @@ const formatOutcomeReportCSV = (data) => {
   if (data.studentResults && Array.isArray(data.studentResults)) {
     data.studentResults.forEach((result) => {
       rows.push({
-        Student: `${result.student.firstName} ${result.student.lastName}`,
+        Student: `${result.student?.firstName || ''} ${result.student?.lastName || ''}`,
         Rating: result.latestRating ? RATING_LABELS[result.latestRating] : 'Not Assessed',
         Date: result.latestDate ? new Date(result.latestDate).toLocaleDateString() : '',
         Comment: result.latestComment || '',
@@ -316,6 +347,20 @@ const formatSchoolSummaryCSV = (data) => {
  */
 export const generatePDF = async (reportData, reportType, options = {}) => {
   return new Promise((resolve, reject) => {
+    // Validate data exists
+    if (!reportData || typeof reportData !== 'object') {
+      console.error('PDF Export error: Invalid or missing report data', { reportData, reportType });
+      // Create a PDF with error message
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const chunks = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+      doc.fontSize(16).text('Export Error: No data available for export', { align: 'center' });
+      doc.end();
+      return;
+    }
+
     const chunks = [];
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
 
@@ -323,28 +368,33 @@ export const generatePDF = async (reportData, reportType, options = {}) => {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    // Add content based on report type
-    switch (reportType) {
-      case 'student':
-        generateStudentPDF(doc, reportData, options);
-        break;
-      case 'student-subject':
-        generateStudentSubjectPDF(doc, reportData, options);
-        break;
-      case 'strand':
-        generateStrandPDF(doc, reportData, options);
-        break;
-      case 'outcome':
-        generateOutcomePDF(doc, reportData, options);
-        break;
-      case 'class':
-        generateClassSummaryPDF(doc, reportData, options);
-        break;
-      case 'school':
-        generateSchoolSummaryPDF(doc, reportData, options);
-        break;
-      default:
-        doc.text('Unknown report type');
+    try {
+      // Add content based on report type
+      switch (reportType) {
+        case 'student':
+          generateStudentPDF(doc, reportData, options);
+          break;
+        case 'student-subject':
+          generateStudentSubjectPDF(doc, reportData, options);
+          break;
+        case 'strand':
+          generateStrandPDF(doc, reportData, options);
+          break;
+        case 'outcome':
+          generateOutcomePDF(doc, reportData, options);
+          break;
+        case 'class':
+          generateClassSummaryPDF(doc, reportData, options);
+          break;
+        case 'school':
+          generateSchoolSummaryPDF(doc, reportData, options);
+          break;
+        default:
+          doc.text('Unknown report type');
+      }
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      doc.fontSize(12).text(`Export Error: ${error.message}`, { align: 'center' });
     }
 
     doc.end();

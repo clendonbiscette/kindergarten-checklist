@@ -2,12 +2,13 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { reportsAPI } from '../api/reports';
 
 // Get student report (By Learner)
+// Note: apiClient interceptor already extracts response.data, so we receive { success, data }
 export const useStudentReport = (studentId, filters = {}) => {
   return useQuery({
     queryKey: ['reports', 'student', studentId, filters],
     queryFn: () => reportsAPI.getStudentReport(studentId, filters),
     enabled: !!studentId,
-    select: (data) => data.data,
+    select: (response) => response?.data,
   });
 };
 
@@ -17,7 +18,7 @@ export const useStudentSubjectReport = (studentId, subjectId, filters = {}) => {
     queryKey: ['reports', 'student-subject', studentId, subjectId, filters],
     queryFn: () => reportsAPI.getStudentSubjectReport(studentId, subjectId, filters),
     enabled: !!(studentId && subjectId),
-    select: (data) => data.data,
+    select: (response) => response?.data,
   });
 };
 
@@ -27,7 +28,7 @@ export const useStrandReport = (strandId, filters = {}) => {
     queryKey: ['reports', 'strand', strandId, filters],
     queryFn: () => reportsAPI.getStrandReport(strandId, filters),
     enabled: !!(strandId && filters.classId),
-    select: (data) => data.data,
+    select: (response) => response?.data,
   });
 };
 
@@ -37,7 +38,7 @@ export const useOutcomeReport = (outcomeId, filters = {}) => {
     queryKey: ['reports', 'outcome', outcomeId, filters],
     queryFn: () => reportsAPI.getOutcomeReport(outcomeId, filters),
     enabled: !!(outcomeId && filters.classId),
-    select: (data) => data.data,
+    select: (response) => response?.data,
   });
 };
 
@@ -47,7 +48,7 @@ export const useClassSummary = (classId, filters = {}) => {
     queryKey: ['reports', 'class', classId, filters],
     queryFn: () => reportsAPI.getClassSummary(classId, filters),
     enabled: !!classId,
-    select: (data) => data.data,
+    select: (response) => response?.data,
   });
 };
 
@@ -57,7 +58,7 @@ export const useSchoolSummary = (schoolId, filters = {}) => {
     queryKey: ['reports', 'school', schoolId, filters],
     queryFn: () => reportsAPI.getSchoolSummary(schoolId, filters),
     enabled: !!schoolId,
-    select: (data) => data.data,
+    select: (response) => response?.data,
   });
 };
 
