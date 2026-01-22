@@ -1481,7 +1481,7 @@ const DesktopAssessmentApp = () => {
             {currentView === 'learner-reports' && renderLearnerReports()}
             {currentView === 'reports' && (
               <ReportDashboard
-                students={students}
+                students={accessibleStudents}
                 classes={classes}
                 terms={terms}
                 subjects={subjects}
