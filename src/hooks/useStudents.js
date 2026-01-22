@@ -56,3 +56,16 @@ export const useDeleteStudent = () => {
     },
   });
 };
+
+// Assign student to class (teachers can use this for their own classes)
+export const useAssignStudentToClass = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ studentId, classId }) => studentsAPI.assignToClass(studentId, classId),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries(['students']);
+      queryClient.invalidateQueries(['student', variables.studentId]);
+    },
+  });
+};

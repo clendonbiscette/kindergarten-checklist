@@ -295,3 +295,83 @@ export const deleteStudent = async (req, res, next) => {
     next(error);
   }
 };
+
+// Assign student to a class (for teachers - limited to their own classes)
+export const assignStudentToClass = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { classId } = req.body;
+    const userId = req.user.userId;
+    const userRole = req.user.role;
+
+    // Get the student
+    const student = await prisma.student.findUnique({
+      where: { id },
+      select: { id: true, schoolId: true, firstName: true, lastName: true },
+    });
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+      });
+    }
+
+    // If classId is provided, verify the class exists and teacher is assigned to it
+    if (classId) {
+      const classData = await prisma.class.findUnique({
+        where: { id: classId },
+        select: { id: true, schoolId: true, teacherId: true, name: true },
+      });
+
+      if (!classData) {
+        return res.status(404).json({
+          success: false,
+          message: 'Class not found',
+        });
+      }
+
+      // Class must be in the same school as the student
+      if (classData.schoolId !== student.schoolId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Class must belong to the same school as the student',
+        });
+      }
+
+      // For teachers, they can only assign to their own classes
+      if (userRole === 'TEACHER' && classData.teacherId !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only assign students to your own classes',
+        });
+      }
+    } else if (userRole === 'TEACHER') {
+      // Teachers cannot remove students from classes (set classId to null)
+      return res.status(403).json({
+        success: false,
+        message: 'Teachers cannot remove students from classes. Contact your school admin.',
+      });
+    }
+
+    // Update the student's class
+    const updatedStudent = await prisma.student.update({
+      where: { id },
+      data: { classId: classId || null },
+      include: {
+        school: { select: { name: true } },
+        class: { select: { name: true, gradeLevel: true } },
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: classId
+        ? `Student assigned to class successfully`
+        : 'Student removed from class',
+      data: updatedStudent,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

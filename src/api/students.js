@@ -25,4 +25,9 @@ export const studentsAPI = {
   delete: async (id) => {
     return apiClient.delete(`/students/${id}`);
   },
+
+  // Assign student to class (teachers can use this for their own classes)
+  assignToClass: async (id, classId) => {
+    return apiClient.patch(`/students/${id}/assign-class`, { classId });
+  },
 };
