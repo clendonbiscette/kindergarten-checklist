@@ -98,14 +98,19 @@ const BulkImportStudents = ({ isOpen, onClose, onSuccess, schoolId, classId }) =
           await createStudent.mutateAsync({
             ...student,
             schoolId,
-            classId: classId || null,
+            ...(classId && { classId }),
           });
           importResults.successful++;
         } catch (err) {
           importResults.failed++;
+          // Extract detailed validation errors if available
+          let errorMsg = err.message || 'Unknown error';
+          if (err.errors && Array.isArray(err.errors)) {
+            errorMsg = err.errors.map(e => `${e.field}: ${e.message}`).join(', ');
+          }
           importResults.errors.push({
             student: `${student.firstName} ${student.lastName}`,
-            error: err.message || 'Unknown error',
+            error: errorMsg,
           });
         }
       }
