@@ -46,7 +46,8 @@ export const reportsAPI = {
     const response = await reportsAPI.exportReport(reportType, format, reportData, options);
 
     // Create blob and download
-    const blob = new Blob([response.data], {
+    // Note: apiClient interceptor already extracts response.data, so 'response' IS the blob data
+    const blob = new Blob([response], {
       type: format === 'csv' ? 'text/csv' : 'application/pdf',
     });
 
