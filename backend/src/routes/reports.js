@@ -34,17 +34,17 @@ router.get(
 );
 
 // Strand report (By Strand) - Teachers can access their class, Admins can access any class in school
+// Note: strandId is not validated as UUID since curriculum IDs may use different formats
 router.get(
   '/strand/:strandId',
-  validateUuidParam('strandId'),
   verifyClassAccess,
   getStrandReport
 );
 
 // Outcome report (By SCO) - Teachers can access their class, Admins can access any class in school
+// Note: outcomeId is not validated as UUID since curriculum IDs may use different formats
 router.get(
   '/outcome/:outcomeId',
-  validateUuidParam('outcomeId'),
   verifyClassAccess,
   getOutcomeReport
 );
