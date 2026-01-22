@@ -127,10 +127,18 @@ export const verifyStudentAccess = async (req, res, next) => {
       return next();
     }
 
-    // Get the student's school
+    // Get the student's school and class info
     const student = await prisma.student.findUnique({
       where: { id: studentId },
-      select: { schoolId: true },
+      select: {
+        schoolId: true,
+        classId: true,
+        class: {
+          select: {
+            teacherId: true,
+          },
+        },
+      },
     });
 
     if (!student) {
@@ -148,6 +156,25 @@ export const verifyStudentAccess = async (req, res, next) => {
         success: false,
         message: 'You do not have access to this student.',
       });
+    }
+
+    // For teachers, verify they are assigned to the student's class
+    if (role === 'TEACHER') {
+      // Student must be in a class
+      if (!student.classId) {
+        return res.status(403).json({
+          success: false,
+          message: 'This student is not assigned to any class.',
+        });
+      }
+
+      // Teacher must be assigned to that class
+      if (student.class?.teacherId !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only assess students in your assigned classes.',
+        });
+      }
     }
 
     req.userSchoolIds = userSchoolIds;
