@@ -2,7 +2,7 @@
 // Generates PDF reports for students, classes, and assessments
 
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 
 /**
@@ -101,7 +101,7 @@ export const exportStudentReportPDF = (student, assessments, options = {}) => {
       assessment.assessmentDate ? format(new Date(assessment.assessmentDate), 'MMM dd, yyyy') : 'N/A'
     ]);
 
-    doc.autoTable({
+    const tableResult = autoTable(doc, {
       startY: currentY,
       head: [['Code', 'Learning Outcome', 'Rating', 'Date']],
       body: tableData,
@@ -115,12 +115,9 @@ export const exportStudentReportPDF = (student, assessments, options = {}) => {
         3: { cellWidth: 35 }
       },
       margin: { left: 14 },
-      didDrawPage: (data) => {
-        currentY = data.cursor.y + 10;
-      }
     });
 
-    currentY = doc.lastAutoTable.finalY + 10;
+    currentY = (doc.lastAutoTable?.finalY || tableResult?.finalY || currentY) + 10;
   });
 
   // Footer on last page
@@ -234,7 +231,7 @@ export const exportClassSummaryPDF = (classData, students, statistics, options =
       `${student.needsPracticePercentage}%`
     ]);
 
-    doc.autoTable({
+    const attentionTable = autoTable(doc, {
       startY: currentY,
       head: [['Student Name', 'Assessments', 'Needs Practice %']],
       body: tableData,
@@ -244,7 +241,7 @@ export const exportClassSummaryPDF = (classData, students, statistics, options =
       margin: { left: 14 }
     });
 
-    currentY = doc.lastAutoTable.finalY + 15;
+    currentY = (doc.lastAutoTable?.finalY || attentionTable?.finalY || currentY) + 15;
   }
 
   // Student roster with assessment counts
@@ -265,7 +262,7 @@ export const exportClassSummaryPDF = (classData, students, statistics, options =
     student.assessmentCount?.toString() || '0'
   ]);
 
-  doc.autoTable({
+  autoTable(doc, {
     startY: currentY,
     head: [['#', 'Student Name', 'Student ID', 'Assessments']],
     body: rosterData,
@@ -448,7 +445,7 @@ export const exportStudentSubjectReportPDF = (reportData, options = {}) => {
   }
 
   // Create the table
-  doc.autoTable({
+  autoTable(doc, {
     startY: infoY,
     head: tableHead,
     body: tableBody,

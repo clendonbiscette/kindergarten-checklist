@@ -124,11 +124,13 @@ export const getStudentReport = async (req, res, next) => {
 
         return {
           ...subject,
-          strands: Object.values(subject.strands).map((strand) => ({
-            ...strand,
-            ratingDistribution: calculateRatingDistribution(strand.assessments),
-            performanceScore: calculatePerformanceScore(strand.assessments),
-          })),
+          strands: Object.values(subject.strands)
+            .map((strand) => ({
+              ...strand,
+              ratingDistribution: calculateRatingDistribution(strand.assessments),
+              performanceScore: calculatePerformanceScore(strand.assessments),
+            }))
+            .sort((a, b) => a.displayOrder - b.displayOrder),
           ratingDistribution: calculateRatingDistribution(subject.assessments),
           performanceScore: calculatePerformanceScore(subject.assessments),
           totalOutcomes: subjectOutcomes.length,
