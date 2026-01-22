@@ -9,7 +9,7 @@ import {
   exportReport,
 } from '../controllers/reportController.js';
 import { authenticate, authorize, verifyStudentAccess, verifySchoolAccess, verifyClassAccess } from '../middleware/auth.js';
-import { validateUuidParam, validateUuidParams } from '../middleware/validation.js';
+import { validateUuidParam } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -25,9 +25,10 @@ router.get(
 );
 
 // Student-Subject detailed report (matching template format with date columns)
+// Note: subjectId is not validated as UUID since curriculum IDs may use different formats
 router.get(
   '/student/:studentId/subject/:subjectId',
-  validateUuidParams('studentId', 'subjectId'),
+  validateUuidParam('studentId'),
   verifyStudentAccess,
   getStudentSubjectReport
 );
