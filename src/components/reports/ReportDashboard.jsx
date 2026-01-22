@@ -425,7 +425,7 @@ const ReportDashboard = ({
 
       {reportType === REPORT_TYPES.STUDENT && (
         <StudentReport
-          data={studentReport.data?.data}
+          data={studentReport.data}
           isLoading={studentReport.isLoading}
           error={studentReport.error}
         />
@@ -433,7 +433,7 @@ const ReportDashboard = ({
 
       {reportType === REPORT_TYPES.STRAND && (
         <StrandReport
-          data={strandReport.data?.data}
+          data={strandReport.data}
           isLoading={strandReport.isLoading}
           error={strandReport.error}
         />
@@ -441,7 +441,7 @@ const ReportDashboard = ({
 
       {reportType === REPORT_TYPES.OUTCOME && (
         <OutcomeReport
-          data={outcomeReport.data?.data}
+          data={outcomeReport.data}
           isLoading={outcomeReport.isLoading}
           error={outcomeReport.error}
         />
@@ -451,7 +451,7 @@ const ReportDashboard = ({
       {showExport && (
         <ReportExport
           reportType={reportType}
-          reportData={getCurrentReportData()?.data}
+          reportData={getCurrentReportData()}
           onClose={() => setShowExport(false)}
         />
       )}
