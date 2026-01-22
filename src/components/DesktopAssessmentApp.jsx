@@ -20,12 +20,14 @@ import {
   useDeleteAssessment
 } from '../hooks/useAssessments';
 import { useClasses, useDeleteClass } from '../hooks/useClasses';
-import { useDeleteStudent } from '../hooks/useStudents';
+import { useDeleteStudent, useAssignStudentToClass } from '../hooks/useStudents';
 import ClassSetupModal from './ClassSetupModal';
 import StudentEntryModal from './StudentEntryModal';
 import ClassEditModal from './ClassEditModal';
 import StudentEditModal from './StudentEditModal';
 import BulkImportStudents from './BulkImportStudents';
+import AssignStudentModal from './AssignStudentModal';
+import BulkAssignStudents from './BulkAssignStudents';
 import AssessmentEditModal from './AssessmentEditModal';
 import ConfirmModal from './ConfirmModal';
 import TeacherWelcome from './TeacherWelcome';
@@ -50,6 +52,8 @@ const DesktopAssessmentApp = () => {
   const [showClassEditModal, setShowClassEditModal] = useState(false);
   const [showStudentEditModal, setShowStudentEditModal] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showAssignStudentModal, setShowAssignStudentModal] = useState(false);
+  const [showBulkAssign, setShowBulkAssign] = useState(false);
   const [showAssessmentEditModal, setShowAssessmentEditModal] = useState(false);
   const [editingClass, setEditingClass] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -103,6 +107,12 @@ const DesktopAssessmentApp = () => {
   const { data: termAssessments = [] } = useTermAssessments(selectedTerm);
   const { data: classes = [] } = useClasses(
     selectedSchool ? { schoolId: selectedSchool, teacherId: user?.id } : {}
+  );
+
+  // Derived state - selected class object
+  const selectedClassObj = useMemo(() =>
+    classes.find(c => c.id === selectedClassId),
+    [classes, selectedClassId]
   );
 
   // Mutations
@@ -977,7 +987,7 @@ const DesktopAssessmentApp = () => {
       );
     }
 
-    const selectedClassObj = classes.find(c => c.id === selectedClassId);
+    // Note: selectedClassObj is now defined at component level via useMemo
     const classStudents = selectedClassId
       ? students.filter(s => s.classId === selectedClassId)
       : students;
@@ -994,19 +1004,20 @@ const DesktopAssessmentApp = () => {
             Create New Class
           </button>
           <button
-            onClick={() => setShowStudentModal(true)}
+            onClick={() => setShowAssignStudentModal(true)}
             disabled={!selectedClassId}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <UserPlus size={18} />
-            Add Student {selectedClassId ? 'to Class' : ''}
+            {selectedClassId ? 'Assign Student to Class' : 'Select a Class First'}
           </button>
           <button
-            onClick={() => setShowBulkImport(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            onClick={() => setShowBulkAssign(true)}
+            disabled={!selectedClassId}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Upload size={18} />
-            Bulk Import Students
+            {selectedClassId ? 'Bulk Assign Students' : 'Select a Class First'}
           </button>
         </div>
 
@@ -1098,22 +1109,6 @@ const DesktopAssessmentApp = () => {
                         DOB: {new Date(student.dateOfBirth).toLocaleDateString()}
                       </div>
                     )}
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        onClick={() => handleEditStudent(student)}
-                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs bg-white text-gray-700 rounded shadow-sm hover:shadow hover:bg-gray-50"
-                      >
-                        <Edit2 size={12} />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteStudent(student.id, `${student.firstName} ${student.lastName}`)}
-                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100"
-                      >
-                        <Trash2 size={12} />
-                        Delete
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>
@@ -1121,19 +1116,22 @@ const DesktopAssessmentApp = () => {
           </div>
         )}
 
-        {/* All Students (unassigned or general view) */}
-        {!selectedClassId && students.length > 0 && (
+        {/* Unassigned Students - Teachers can assign to their classes */}
+        {!selectedClassId && students.filter(s => !s.classId).length > 0 && (
           <div className="bg-white shadow-sm rounded-lg p-4">
             <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
               <Users size={20} />
-              All Students ({students.length})
+              Unassigned Students ({students.filter(s => !s.classId).length})
             </h3>
+            <p className="text-sm text-gray-500 mb-3">
+              These students are not yet assigned to any class. Select a class above, then use "Add Student to Class" to assign them.
+            </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {students.map(student => (
+              {students.filter(s => !s.classId).map(student => (
                 <div
                   key={student.id}
-                  className="p-3 rounded-lg bg-gray-50/80"
+                  className="p-3 rounded-lg bg-amber-50/80 border border-amber-200"
                 >
                   <div className="font-medium text-gray-800">
                     {student.firstName} {student.lastName}
@@ -1141,26 +1139,8 @@ const DesktopAssessmentApp = () => {
                   <div className="text-xs text-gray-500 mt-1">
                     ID: {student.studentIdNumber}
                   </div>
-                  {student.class && (
-                    <div className="text-xs text-indigo-600 mt-1">
-                      Class: {student.class.name}
-                    </div>
-                  )}
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      onClick={() => handleEditStudent(student)}
-                      className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs bg-white text-gray-700 rounded shadow-sm hover:shadow hover:bg-gray-50"
-                    >
-                      <Edit2 size={12} />
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteStudent(student.id, `${student.firstName} ${student.lastName}`)}
-                      className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100"
-                    >
-                      <Trash2 size={12} />
-                      Delete
-                    </button>
+                  <div className="text-xs text-amber-600 mt-1">
+                    Not assigned to a class
                   </div>
                 </div>
               ))}
@@ -1503,7 +1483,7 @@ const DesktopAssessmentApp = () => {
         student={editingStudent}
       />
 
-      {/* Bulk Import Modal */}
+      {/* Bulk Import Modal - for admins creating new students */}
       <BulkImportStudents
         isOpen={showBulkImport}
         onClose={() => setShowBulkImport(false)}
@@ -1512,6 +1492,30 @@ const DesktopAssessmentApp = () => {
         }}
         schoolId={selectedSchool}
         classId={selectedClassId}
+      />
+
+      {/* Assign Student Modal - for teachers assigning existing students */}
+      <AssignStudentModal
+        isOpen={showAssignStudentModal}
+        onClose={() => setShowAssignStudentModal(false)}
+        onSuccess={() => {
+          // Data will auto-refresh via React Query
+        }}
+        classId={selectedClassId}
+        className={selectedClassObj?.name || ''}
+        students={students}
+      />
+
+      {/* Bulk Assign Students Modal - for teachers bulk assigning existing students */}
+      <BulkAssignStudents
+        isOpen={showBulkAssign}
+        onClose={() => setShowBulkAssign(false)}
+        onSuccess={() => {
+          // Data will auto-refresh via React Query
+        }}
+        classId={selectedClassId}
+        className={selectedClassObj?.name || ''}
+        students={students}
       />
 
       {/* Assessment History Modal */}
