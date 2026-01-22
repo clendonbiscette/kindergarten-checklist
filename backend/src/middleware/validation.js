@@ -252,6 +252,12 @@ export const validateUuidParam = (paramName = 'id') => [
   handleValidationErrors,
 ];
 
+// Validate multiple UUID params at once (for routes with multiple params)
+export const validateUuidParams = (...paramNames) => [
+  ...paramNames.map(name => param(name).isUUID().withMessage(`Invalid ${name}`)),
+  handleValidationErrors,
+];
+
 // Pagination query validation
 export const validatePagination = [
   query('page')

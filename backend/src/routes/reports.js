@@ -9,7 +9,7 @@ import {
   exportReport,
 } from '../controllers/reportController.js';
 import { authenticate, authorize, verifyStudentAccess, verifySchoolAccess, verifyClassAccess } from '../middleware/auth.js';
-import { validateUuidParam } from '../middleware/validation.js';
+import { validateUuidParam, validateUuidParams } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -27,8 +27,7 @@ router.get(
 // Student-Subject detailed report (matching template format with date columns)
 router.get(
   '/student/:studentId/subject/:subjectId',
-  validateUuidParam('studentId'),
-  validateUuidParam('subjectId'),
+  validateUuidParams('studentId', 'subjectId'),
   verifyStudentAccess,
   getStudentSubjectReport
 );
