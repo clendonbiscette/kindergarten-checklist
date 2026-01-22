@@ -815,7 +815,7 @@ export const getStudentSubjectReport = async (req, res, next) => {
     // Get term info if specified
     let termInfo = null;
     if (termId) {
-      termInfo = await prisma.term.findUnique({
+      termInfo = await prisma.academicTerm.findUnique({
         where: { id: termId },
         select: { name: true, schoolYear: true, startDate: true, endDate: true },
       });
