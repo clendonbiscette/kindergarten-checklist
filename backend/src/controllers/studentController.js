@@ -304,10 +304,21 @@ export const assignStudentToClass = async (req, res, next) => {
     const userId = req.user.userId;
     const userRole = req.user.role;
 
-    // Get the student
+    // Get the student with current class info
     const student = await prisma.student.findUnique({
       where: { id },
-      select: { id: true, schoolId: true, firstName: true, lastName: true },
+      select: {
+        id: true,
+        schoolId: true,
+        firstName: true,
+        lastName: true,
+        classId: true,
+        class: {
+          select: {
+            teacherId: true,
+          },
+        },
+      },
     });
 
     if (!student) {
@@ -347,11 +358,13 @@ export const assignStudentToClass = async (req, res, next) => {
         });
       }
     } else if (userRole === 'TEACHER') {
-      // Teachers cannot remove students from classes (set classId to null)
-      return res.status(403).json({
-        success: false,
-        message: 'Teachers cannot remove students from classes. Contact your school admin.',
-      });
+      // Teachers can only remove students from their own classes
+      if (!student.classId || student.class?.teacherId !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only remove students from your own classes',
+        });
+      }
     }
 
     // Update the student's class
