@@ -7,6 +7,7 @@ const BulkImportStudents = ({ isOpen, onClose, onSuccess, schoolId, classId }) =
   const [importing, setImporting] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState('');
+  const [progress, setProgress] = useState({ current: 0, total: 0, currentStudent: '', percent: 0 });
 
   const createStudent = useCreateStudent();
 
@@ -75,6 +76,7 @@ const BulkImportStudents = ({ isOpen, onClose, onSuccess, schoolId, classId }) =
     setImporting(true);
     setError('');
     setResults(null);
+    setProgress({ current: 0, total: 0, currentStudent: '', percent: 0 });
 
     try {
       // Read file
@@ -93,7 +95,16 @@ const BulkImportStudents = ({ isOpen, onClose, onSuccess, schoolId, classId }) =
         errors: [],
       };
 
-      for (const student of students) {
+      for (let i = 0; i < students.length; i++) {
+        const student = students[i];
+        const percent = Math.round(((i + 1) / students.length) * 100);
+        setProgress({
+          current: i + 1,
+          total: students.length,
+          currentStudent: `${student.firstName} ${student.lastName}`,
+          percent,
+        });
+
         try {
           await createStudent.mutateAsync({
             ...student,
@@ -209,6 +220,29 @@ const BulkImportStudents = ({ isOpen, onClose, onSuccess, schoolId, classId }) =
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded flex items-start gap-2">
               <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
               <div className="text-sm">{error}</div>
+            </div>
+          )}
+
+          {/* Progress Indicator */}
+          {importing && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-indigo-900">
+                  Importing students...
+                </span>
+                <span className="text-sm font-bold text-indigo-700">
+                  {progress.percent}%
+                </span>
+              </div>
+              <div className="w-full bg-indigo-200 rounded-full h-2.5 mb-2">
+                <div
+                  className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                  style={{ width: `${progress.percent}%` }}
+                />
+              </div>
+              <div className="text-xs text-indigo-700">
+                {progress.current} of {progress.total}: {progress.currentStudent}
+              </div>
             </div>
           )}
 
