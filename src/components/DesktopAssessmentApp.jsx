@@ -115,6 +115,20 @@ const DesktopAssessmentApp = () => {
     [classes, selectedClassId]
   );
 
+  // Derived state - students accessible to the current user
+  // Teachers can only see students in their assigned classes
+  // Admins can see all students
+  const accessibleStudents = useMemo(() => {
+    if (user?.role === 'TEACHER') {
+      // Get IDs of classes taught by this teacher
+      const teacherClassIds = classes.map(c => c.id);
+      // Filter students to only those in teacher's classes
+      return students.filter(s => s.classId && teacherClassIds.includes(s.classId));
+    }
+    // Admins and other roles can see all students
+    return students;
+  }, [students, classes, user?.role]);
+
   // Mutations
   const createAssessment = useCreateAssessment();
   const updateAssessment = useUpdateAssessment();
@@ -1361,9 +1375,9 @@ const DesktopAssessmentApp = () => {
                     className="w-full mt-1 px-2 py-1.5 border border-gray-200 rounded text-sm focus:border-gray-300 disabled:opacity-50"
                   >
                     <option value="">
-                      {!selectedSchool ? 'Select school first' : students.length === 0 ? 'No students enrolled' : `Select student (${students.length})...`}
+                      {!selectedSchool ? 'Select school first' : accessibleStudents.length === 0 ? (user?.role === 'TEACHER' ? 'No students in your classes' : 'No students enrolled') : `Select student (${accessibleStudents.length})...`}
                     </option>
-                    {students.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                    {accessibleStudents.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
                   </select>
                 </div>
 
@@ -1395,9 +1409,9 @@ const DesktopAssessmentApp = () => {
                     className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:border-gray-300 disabled:opacity-50"
                   >
                     <option value="">
-                      {!selectedSchool ? 'Select school first' : students.length === 0 ? 'No students enrolled' : `Select student (${students.length})...`}
+                      {!selectedSchool ? 'Select school first' : accessibleStudents.length === 0 ? (user?.role === 'TEACHER' ? 'No students in your classes' : 'No students enrolled') : `Select student (${accessibleStudents.length})...`}
                     </option>
-                    {students.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                    {accessibleStudents.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
                   </select>
                 </div>
               </div>
