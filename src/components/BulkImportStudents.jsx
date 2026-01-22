@@ -128,6 +128,7 @@ const BulkImportStudents = ({ isOpen, onClose, onSuccess, schoolId, classId }) =
   };
 
   const downloadTemplate = () => {
+    // Note: dateOfBirth must be in YYYY-MM-DD format (ISO 8601)
     const csvContent = 'firstName,lastName,studentId,dateOfBirth\nJohn,Doe,2024-001,2019-05-15\nJane,Smith,2024-002,2019-08-20\n';
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -167,6 +168,7 @@ const BulkImportStudents = ({ isOpen, onClose, onSuccess, schoolId, classId }) =
             <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
               <li>Download the CSV template below</li>
               <li>Fill in your student data (firstName, lastName, studentId are required)</li>
+              <li>Date of birth format must be <strong>YYYY-MM-DD</strong> (e.g., 2019-05-15)</li>
               <li>Upload the completed CSV file</li>
               <li>Click "Import Students" to begin the import</li>
             </ol>
