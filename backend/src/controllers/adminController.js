@@ -307,10 +307,10 @@ export const resetUserPassword = async (req, res, next) => {
     const { id } = req.params;
     const { newPassword } = req.body;
 
-    if (!newPassword || newPassword.length < 6) {
+    if (!newPassword || newPassword.length < 8) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 6 characters',
+        message: 'Password must be at least 8 characters',
       });
     }
 
@@ -546,28 +546,26 @@ export const getSchools = async (req, res, next) => {
       },
     });
 
-    // Get admin counts per school
-    const schoolsWithAdmins = await Promise.all(
-      schools.map(async (school) => {
-        const adminCount = await prisma.userAssignment.count({
-          where: {
-            schoolId: school.id,
-            user: { role: 'SCHOOL_ADMIN' },
-          },
-        });
-        const teacherCount = await prisma.userAssignment.count({
-          where: {
-            schoolId: school.id,
-            user: { role: 'TEACHER' },
-          },
-        });
-        return {
-          ...school,
-          adminCount,
-          teacherCount,
-        };
-      })
-    );
+    // Get admin and teacher counts in a single bulk query (avoids N+1)
+    const allAssignments = await prisma.userAssignment.findMany({
+      where: { schoolId: { in: schools.map(s => s.id) } },
+      select: { schoolId: true, user: { select: { role: true } } },
+    });
+
+    const schoolStats = {};
+    for (const a of allAssignments) {
+      if (!schoolStats[a.schoolId]) {
+        schoolStats[a.schoolId] = { adminCount: 0, teacherCount: 0 };
+      }
+      if (a.user.role === 'SCHOOL_ADMIN') schoolStats[a.schoolId].adminCount++;
+      if (a.user.role === 'TEACHER') schoolStats[a.schoolId].teacherCount++;
+    }
+
+    const schoolsWithAdmins = schools.map(school => ({
+      ...school,
+      adminCount: schoolStats[school.id]?.adminCount ?? 0,
+      teacherCount: schoolStats[school.id]?.teacherCount ?? 0,
+    }));
 
     res.status(200).json({
       success: true,

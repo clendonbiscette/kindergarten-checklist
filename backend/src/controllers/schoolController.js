@@ -26,9 +26,17 @@ export const getSchools = async (req, res, next) => {
   try {
     const { countryId } = req.query;
 
-    const where = {
-      ...(countryId && { countryId }),
-    };
+    const where = {};
+
+    if (countryId) {
+      where.countryId = countryId;
+    } else if (req.userCountryIds) {
+      // COUNTRY_ADMIN: restrict to assigned countries (set by verifySchoolAccess)
+      where.countryId = { in: req.userCountryIds };
+    } else if (req.userSchoolIds) {
+      // SCHOOL_ADMIN / TEACHER: restrict to assigned schools
+      where.id = { in: req.userSchoolIds };
+    }
 
     const schools = await prisma.school.findMany({
       where,
@@ -309,6 +317,86 @@ export const getMySchool = async (req, res, next) => {
       data: {
         ...assignment.school,
         teachers: teachers.map(t => t.user),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Country Admin overview — returns assigned countries, schools, and aggregate stats
+export const getCountryAdminOverview = async (req, res, next) => {
+  try {
+    const { userId } = req.user;
+
+    // Get assigned countries
+    const countryAssignments = await prisma.userAssignment.findMany({
+      where: { userId, countryId: { not: null } },
+      select: {
+        country: {
+          select: { id: true, name: true, code: true },
+        },
+      },
+    });
+
+    const countries = countryAssignments.map(a => a.country).filter(Boolean);
+    const countryIds = countries.map(c => c.id);
+
+    if (countryIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          countries: [],
+          schools: [],
+          stats: { totalSchools: 0, totalStudents: 0, totalTeachers: 0, totalAdmins: 0 },
+        },
+      });
+    }
+
+    // Schools in assigned countries with counts
+    const schools = await prisma.school.findMany({
+      where: { countryId: { in: countryIds } },
+      orderBy: [{ country: { name: 'asc' } }, { name: 'asc' }],
+      include: {
+        country: { select: { id: true, name: true, code: true } },
+        _count: { select: { students: true, classes: true } },
+      },
+    });
+
+    // User counts per school (bulk — avoids N+1)
+    const allAssignments = await prisma.userAssignment.findMany({
+      where: { schoolId: { in: schools.map(s => s.id) } },
+      select: { schoolId: true, user: { select: { role: true } } },
+    });
+
+    const schoolStats = {};
+    for (const a of allAssignments) {
+      if (!schoolStats[a.schoolId]) schoolStats[a.schoolId] = { teacherCount: 0, adminCount: 0 };
+      if (a.user.role === 'TEACHER') schoolStats[a.schoolId].teacherCount++;
+      if (a.user.role === 'SCHOOL_ADMIN') schoolStats[a.schoolId].adminCount++;
+    }
+
+    const schoolsWithStats = schools.map(school => ({
+      ...school,
+      teacherCount: schoolStats[school.id]?.teacherCount ?? 0,
+      adminCount: schoolStats[school.id]?.adminCount ?? 0,
+    }));
+
+    const totalStudents = schools.reduce((sum, s) => sum + s._count.students, 0);
+    const totalTeachers = Object.values(schoolStats).reduce((sum, s) => sum + s.teacherCount, 0);
+    const totalAdmins = Object.values(schoolStats).reduce((sum, s) => sum + s.adminCount, 0);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        countries,
+        schools: schoolsWithStats,
+        stats: {
+          totalSchools: schools.length,
+          totalStudents,
+          totalTeachers,
+          totalAdmins,
+        },
       },
     });
   } catch (error) {

@@ -9,6 +9,7 @@ import {
   createMySchool,
   updateMySchool,
   getMySchool,
+  getCountryAdminOverview,
 } from '../controllers/schoolController.js';
 import { authenticate, authorize, verifySchoolAccess } from '../middleware/auth.js';
 
@@ -26,8 +27,11 @@ router.get('/my-school', authorize('SCHOOL_ADMIN'), getMySchool);
 router.post('/my-school', authorize('SCHOOL_ADMIN'), createMySchool);
 router.put('/my-school', authorize('SCHOOL_ADMIN'), updateMySchool);
 
-// Schools
-router.get('/', getSchools);
+// Country Admin overview (assigned countries + schools + stats)
+router.get('/my-country', authorize('COUNTRY_ADMIN', 'SUPERUSER'), getCountryAdminOverview);
+
+// Schools (verifySchoolAccess populates req.userCountryIds / req.userSchoolIds for filtering)
+router.get('/', verifySchoolAccess, getSchools);
 router.get('/:id', verifySchoolAccess, getSchool);
 router.post('/', authorize('COUNTRY_ADMIN', 'SUPERUSER'), createSchool);
 

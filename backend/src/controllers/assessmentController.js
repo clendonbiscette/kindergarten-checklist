@@ -277,6 +277,45 @@ export const getTermAssessments = async (req, res, next) => {
     const { termId } = req.params;
     const { subjectId, strandId } = req.query;
 
+    // Verify user has access to this term's school
+    const term = await prisma.academicTerm.findUnique({
+      where: { id: termId },
+      select: { schoolId: true },
+    });
+
+    if (!term) {
+      return res.status(404).json({ success: false, message: 'Term not found.' });
+    }
+
+    const { role, userId } = req.user;
+
+    if (role !== 'SUPERUSER') {
+      if (role === 'COUNTRY_ADMIN') {
+        const countryAssignments = await prisma.userAssignment.findMany({
+          where: { userId, countryId: { not: null } },
+          select: { countryId: true },
+        });
+        const userCountryIds = countryAssignments.map(a => a.countryId);
+        const school = await prisma.school.findUnique({
+          where: { id: term.schoolId },
+          select: { countryId: true },
+        });
+        if (!school || !userCountryIds.includes(school.countryId)) {
+          return res.status(403).json({ success: false, message: 'You do not have access to this term.' });
+        }
+      } else {
+        // SCHOOL_ADMIN and TEACHER: must be assigned to the school
+        const schoolAssignments = await prisma.userAssignment.findMany({
+          where: { userId, schoolId: { not: null } },
+          select: { schoolId: true },
+        });
+        const userSchoolIds = schoolAssignments.map(a => a.schoolId);
+        if (!userSchoolIds.includes(term.schoolId)) {
+          return res.status(403).json({ success: false, message: 'You do not have access to this term.' });
+        }
+      }
+    }
+
     const where = {
       termId,
       ...(subjectId && {

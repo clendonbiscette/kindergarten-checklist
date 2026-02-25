@@ -1,9 +1,17 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
-const REFRESH_SECRET = process.env.REFRESH_SECRET || 'your-refresh-token-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+const REFRESH_SECRET = process.env.REFRESH_SECRET;
 const ACCESS_TOKEN_EXPIRES_IN = process.env.ACCESS_TOKEN_EXPIRES_IN || '15m';
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || '7d';
+
+// Fail loudly at startup if secrets are missing or too weak
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET env var is missing or too short (min 32 chars). Set it in backend/.env or Vercel env settings.');
+}
+if (!REFRESH_SECRET || REFRESH_SECRET.length < 32) {
+  throw new Error('REFRESH_SECRET env var is missing or too short (min 32 chars). Set it in backend/.env or Vercel env settings.');
+}
 
 export const generateAccessToken = (userId, email, role) => {
   const payload = {

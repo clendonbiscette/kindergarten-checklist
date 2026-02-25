@@ -1,9 +1,9 @@
 import 'dotenv/config';
+import * as Sentry from '@sentry/node';
 import express from 'express';
 import cors from 'cors';
+import morgan from 'morgan';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
-
-// Import routes
 import authRoutes from './routes/auth.js';
 import assessmentRoutes from './routes/assessments.js';
 import curriculumRoutes from './routes/curriculum.js';
@@ -14,6 +14,11 @@ import adminRoutes from './routes/admin.js';
 import termRoutes from './routes/terms.js';
 import reportRoutes from './routes/reports.js';
 
+// Init Sentry before registering routes (captures unhandled errors)
+if (process.env.SENTRY_DSN) {
+  Sentry.init({ dsn: process.env.SENTRY_DSN });
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -22,16 +27,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging in development
-if (process.env.NODE_ENV === 'development') {
-  app.use((req, res, next) => {
-    console.log(`${req.method} ${req.path}`);
-    next();
-  });
-}
+// HTTP request logging
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.status(200).json({
     success: true,
     message: 'OHPC Kindergarten Assessment API is running',
@@ -52,6 +52,11 @@ app.use('/api/reports', reportRoutes);
 
 // 404 handler
 app.use(notFound);
+
+// Sentry error handler (must be before custom error handler)
+if (process.env.SENTRY_DSN) {
+  app.use(Sentry.expressErrorHandler());
+}
 
 // Error handler (must be last)
 app.use(errorHandler);

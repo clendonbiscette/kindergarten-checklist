@@ -9,6 +9,7 @@ import {
   removeStudentFromClass,
 } from '../controllers/classController.js';
 import { authenticate, authorize, verifySchoolAccess, verifyClassAccess } from '../middleware/auth.js';
+import { validateCreateClass, validateUpdateClass } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -22,10 +23,10 @@ router.get('/', verifySchoolAccess, getClasses);
 router.get('/:id', verifyClassAccess, getClass);
 
 // Create class (teachers and admins, must have school access)
-router.post('/', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), verifySchoolAccess, createClass);
+router.post('/', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), validateCreateClass, verifySchoolAccess, createClass);
 
 // Update class (teachers and admins, must have class access)
-router.put('/:id', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), verifyClassAccess, updateClass);
+router.put('/:id', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), validateUpdateClass, verifyClassAccess, updateClass);
 
 // Delete class (admins only, must have class access)
 router.delete('/:id', authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN'), verifyClassAccess, deleteClass);

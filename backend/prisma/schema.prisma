@@ -233,3 +233,20 @@ enum AssessmentRating {
   MEETING
   NEEDS_PRACTICE
 }
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  tableName String   @map("table_name")
+  recordId  String   @map("record_id")
+  action    String
+  oldValues Json?    @map("old_values")
+  newValues Json?    @map("new_values")
+  userId    String?  @map("user_id")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tableName, recordId])
+  @@index([userId])
+  @@map("audit_logs")
+}

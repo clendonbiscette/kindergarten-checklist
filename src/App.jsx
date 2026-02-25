@@ -3,6 +3,7 @@ import { useAuth } from './contexts/AuthContext'
 import Login from './components/Login'
 import DesktopAssessmentApp from './components/DesktopAssessmentApp'
 import SuperuserDashboard from './components/SuperuserDashboard'
+import CountryAdminDashboard from './components/CountryAdminDashboard'
 import SchoolAdminOnboarding from './components/SchoolAdminOnboarding'
 import SchoolAdminDashboard from './components/SchoolAdminDashboard'
 import LoadingSpinner from './components/LoadingSpinner'
@@ -50,6 +51,10 @@ function App() {
   // Route based on user role
   if (user?.role === 'SUPERUSER') {
     return <SuperuserDashboard />
+  }
+
+  if (user?.role === 'COUNTRY_ADMIN') {
+    return <CountryAdminDashboard />
   }
 
   if (user?.role === 'SCHOOL_ADMIN') {

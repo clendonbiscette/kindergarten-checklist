@@ -9,7 +9,9 @@
     "seed": "node prisma/seed.js",
     "seed-sample": "node scripts/seedSampleData.js",
     "create-test-user": "node scripts/createTestUser.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +19,7 @@
   "description": "",
   "dependencies": {
     "@prisma/client": "^6.19.0",
+    "@sentry/node": "^10.40.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -24,10 +27,14 @@
     "express-validator": "^7.3.0",
     "fast-csv": "^5.0.5",
     "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.1",
     "pdfkit": "^0.17.2"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.18",
     "nodemon": "^3.1.11",
-    "prisma": "^6.19.0"
+    "prisma": "^6.19.0",
+    "supertest": "^7.2.2",
+    "vitest": "^4.0.18"
   }
 }

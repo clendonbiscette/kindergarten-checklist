@@ -68,7 +68,7 @@ export const calculateProgressBySubject = (assessments, outcomes, students) => {
       acc[subjectName] = [];
     }
     acc[subjectName].push(outcome.id);
-    return {};
+    return acc;
   }, {});
 
   // Calculate progress for each subject

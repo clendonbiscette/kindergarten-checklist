@@ -246,6 +246,39 @@ export const validateCreateTerm = [
   handleValidationErrors,
 ];
 
+// Teacher registration validation (no `role` field — controller hardcodes TEACHER)
+export const validateTeacherRegister = [
+  body('email')
+    .isEmail()
+    .withMessage('Please provide a valid email address')
+    .normalizeEmail(),
+  body('password')
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters long')
+    .matches(/[A-Z]/)
+    .withMessage('Password must contain at least one uppercase letter')
+    .matches(/[a-z]/)
+    .withMessage('Password must contain at least one lowercase letter')
+    .matches(/[0-9]/)
+    .withMessage('Password must contain at least one number'),
+  body('firstName')
+    .trim()
+    .notEmpty()
+    .withMessage('First name is required')
+    .isLength({ max: 100 })
+    .withMessage('First name must not exceed 100 characters'),
+  body('lastName')
+    .trim()
+    .notEmpty()
+    .withMessage('Last name is required')
+    .isLength({ max: 100 })
+    .withMessage('Last name must not exceed 100 characters'),
+  body('schoolId')
+    .isUUID()
+    .withMessage('Valid school ID is required'),
+  handleValidationErrors,
+];
+
 // UUID param validation
 export const validateUuidParam = (paramName = 'id') => [
   param(paramName).isUUID().withMessage(`Invalid ${paramName}`),

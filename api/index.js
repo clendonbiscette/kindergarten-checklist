@@ -1,7 +1,7 @@
+import * as Sentry from '@sentry/node';
 import express from 'express';
 import cors from 'cors';
-
-// Import routes from backend
+import morgan from 'morgan';
 import authRoutes from '../backend/src/routes/auth.js';
 import assessmentRoutes from '../backend/src/routes/assessments.js';
 import curriculumRoutes from '../backend/src/routes/curriculum.js';
@@ -12,18 +12,34 @@ import adminRoutes from '../backend/src/routes/admin.js';
 import termRoutes from '../backend/src/routes/terms.js';
 import reportRoutes from '../backend/src/routes/reports.js';
 
+if (process.env.SENTRY_DSN) {
+  Sentry.init({ dsn: process.env.SENTRY_DSN });
+}
+
 const app = express();
 
 // Middleware
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : ['http://localhost:5173'];
+
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. curl, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin '${origin}' is not allowed`));
+  },
   credentials: true,
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// HTTP request logging (combined format → captured by Vercel logs)
+app.use(morgan('combined'));
+
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', (_req, res) => {
   res.status(200).json({
     success: true,
     message: 'OHPC Kindergarten Assessment API is running',
@@ -50,6 +66,11 @@ app.use('/api/{*splat}', (req, res) => {
     message: `API endpoint not found: ${req.method} ${req.path}`,
   });
 });
+
+// Sentry error handler (must be before custom error handler)
+if (process.env.SENTRY_DSN) {
+  app.use(Sentry.expressErrorHandler());
+}
 
 // Error handler
 app.use((err, req, res, next) => {

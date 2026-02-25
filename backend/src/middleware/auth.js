@@ -1,7 +1,9 @@
 import { verifyToken } from '../utils/jwt.js';
 import prisma from '../utils/prisma.js';
 
-// Cache user's school assignments to avoid repeated DB queries
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+// Returns all schoolIds a user is directly assigned to
 const getSchoolIdsForUser = async (userId) => {
   const assignments = await prisma.userAssignment.findMany({
     where: { userId, schoolId: { not: null } },
@@ -9,6 +11,26 @@ const getSchoolIdsForUser = async (userId) => {
   });
   return assignments.map(a => a.schoolId);
 };
+
+// Returns all countryIds a COUNTRY_ADMIN is assigned to
+const getCountryIdsForUser = async (userId) => {
+  const assignments = await prisma.userAssignment.findMany({
+    where: { userId, countryId: { not: null } },
+    select: { countryId: true },
+  });
+  return assignments.map(a => a.countryId);
+};
+
+// Given a schoolId, returns that school's countryId (or null)
+const getSchoolCountryId = async (schoolId) => {
+  const school = await prisma.school.findUnique({
+    where: { id: schoolId },
+    select: { countryId: true },
+  });
+  return school?.countryId ?? null;
+};
+
+// ─── authenticate ────────────────────────────────────────────────────────────
 
 export const authenticate = async (req, res, next) => {
   try {
@@ -42,7 +64,8 @@ export const authenticate = async (req, res, next) => {
   }
 };
 
-// Role-based access control middleware
+// ─── authorize ───────────────────────────────────────────────────────────────
+
 export const authorize = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {
@@ -63,38 +86,50 @@ export const authorize = (...allowedRoles) => {
   };
 };
 
-// Verify user has access to a specific school
-// SUPERUSER and COUNTRY_ADMIN bypass school checks
+// ─── verifySchoolAccess ──────────────────────────────────────────────────────
+// SUPERUSER: unrestricted.
+// COUNTRY_ADMIN: can only access schools within their assigned countries.
+// SCHOOL_ADMIN / TEACHER: can only access schools they are directly assigned to.
+
 export const verifySchoolAccess = async (req, res, next) => {
   try {
     const { role, userId } = req.user;
 
-    // Superusers can access any school
     if (role === 'SUPERUSER') {
       return next();
     }
 
-    // Country admins need country-level check (more complex, skip for now)
+    const schoolId = req.params.id || req.params.schoolId || req.body?.schoolId || req.query.schoolId;
+
     if (role === 'COUNTRY_ADMIN') {
-      // TODO: Verify country admin has access to school's country
+      const userCountryIds = await getCountryIdsForUser(userId);
+      req.userCountryIds = userCountryIds;
+
+      if (!schoolId) {
+        // No specific school requested — controller will filter by country
+        return next();
+      }
+
+      const schoolCountryId = await getSchoolCountryId(schoolId);
+      if (!schoolCountryId || !userCountryIds.includes(schoolCountryId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'This school is not in your assigned country.',
+        });
+      }
+
       return next();
     }
 
-    // Get user's school IDs first
+    // SCHOOL_ADMIN and TEACHER: direct school assignment check
     const userSchoolIds = await getSchoolIdsForUser(userId);
     req.userSchoolIds = userSchoolIds;
 
-    // Get schoolId from various sources (params, body, or query)
-    // Use optional chaining since req.body may be undefined for GET requests
-    const schoolId = req.params.schoolId || req.body?.schoolId || req.query.schoolId;
-
     if (!schoolId) {
-      // No school specified - for SCHOOL_ADMIN, attach their school IDs so controllers can filter
-      // This allows listing all resources for their school(s)
+      // No school specified — attach school IDs so controllers can filter
       return next();
     }
 
-    // For teachers and school admins, verify they belong to this school
     if (!userSchoolIds.includes(schoolId)) {
       return res.status(403).json({
         success: false,
@@ -112,7 +147,8 @@ export const verifySchoolAccess = async (req, res, next) => {
   }
 };
 
-// Helper to verify ownership of a student
+// ─── verifyStudentAccess ─────────────────────────────────────────────────────
+
 export const verifyStudentAccess = async (req, res, next) => {
   try {
     const { role, userId } = req.user;
@@ -127,17 +163,12 @@ export const verifyStudentAccess = async (req, res, next) => {
       return next();
     }
 
-    // Get the student's school and class info
     const student = await prisma.student.findUnique({
       where: { id: studentId },
       select: {
         schoolId: true,
         classId: true,
-        class: {
-          select: {
-            teacherId: true,
-          },
-        },
+        class: { select: { teacherId: true } },
       },
     });
 
@@ -148,8 +179,24 @@ export const verifyStudentAccess = async (req, res, next) => {
       });
     }
 
-    // Verify user has access to student's school
+    if (role === 'COUNTRY_ADMIN') {
+      const userCountryIds = await getCountryIdsForUser(userId);
+      req.userCountryIds = userCountryIds;
+
+      const schoolCountryId = await getSchoolCountryId(student.schoolId);
+      if (!schoolCountryId || !userCountryIds.includes(schoolCountryId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have access to this student.',
+        });
+      }
+
+      return next();
+    }
+
+    // SCHOOL_ADMIN and TEACHER
     const userSchoolIds = await getSchoolIdsForUser(userId);
+    req.userSchoolIds = userSchoolIds;
 
     if (!userSchoolIds.includes(student.schoolId)) {
       return res.status(403).json({
@@ -160,7 +207,6 @@ export const verifyStudentAccess = async (req, res, next) => {
 
     // For teachers, verify they are assigned to the student's class
     if (role === 'TEACHER') {
-      // Student must be in a class
       if (!student.classId) {
         return res.status(403).json({
           success: false,
@@ -168,7 +214,6 @@ export const verifyStudentAccess = async (req, res, next) => {
         });
       }
 
-      // Teacher must be assigned to that class
       if (student.class?.teacherId !== userId) {
         return res.status(403).json({
           success: false,
@@ -177,7 +222,6 @@ export const verifyStudentAccess = async (req, res, next) => {
       }
     }
 
-    req.userSchoolIds = userSchoolIds;
     next();
   } catch (error) {
     return res.status(500).json({
@@ -188,7 +232,8 @@ export const verifyStudentAccess = async (req, res, next) => {
   }
 };
 
-// Helper to verify ownership of a class
+// ─── verifyClassAccess ───────────────────────────────────────────────────────
+
 export const verifyClassAccess = async (req, res, next) => {
   try {
     const { role, userId } = req.user;
@@ -203,7 +248,6 @@ export const verifyClassAccess = async (req, res, next) => {
       return next();
     }
 
-    // Get the class's school
     const classData = await prisma.class.findUnique({
       where: { id: classId },
       select: { schoolId: true, teacherId: true },
@@ -216,8 +260,24 @@ export const verifyClassAccess = async (req, res, next) => {
       });
     }
 
-    // Verify user has access to class's school
+    if (role === 'COUNTRY_ADMIN') {
+      const userCountryIds = await getCountryIdsForUser(userId);
+      req.userCountryIds = userCountryIds;
+
+      const schoolCountryId = await getSchoolCountryId(classData.schoolId);
+      if (!schoolCountryId || !userCountryIds.includes(schoolCountryId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'This class is not in your assigned country.',
+        });
+      }
+
+      return next();
+    }
+
+    // SCHOOL_ADMIN and TEACHER
     const userSchoolIds = await getSchoolIdsForUser(userId);
+    req.userSchoolIds = userSchoolIds;
 
     if (!userSchoolIds.includes(classData.schoolId)) {
       return res.status(403).json({
@@ -226,7 +286,7 @@ export const verifyClassAccess = async (req, res, next) => {
       });
     }
 
-    // For teachers, also verify they are assigned to this class
+    // For teachers, verify they are assigned to this class
     if (role === 'TEACHER' && classData.teacherId !== userId) {
       return res.status(403).json({
         success: false,
@@ -234,7 +294,6 @@ export const verifyClassAccess = async (req, res, next) => {
       });
     }
 
-    req.userSchoolIds = userSchoolIds;
     next();
   } catch (error) {
     return res.status(500).json({
@@ -245,7 +304,8 @@ export const verifyClassAccess = async (req, res, next) => {
   }
 };
 
-// Helper to verify ownership of an assessment
+// ─── verifyAssessmentAccess ──────────────────────────────────────────────────
+
 export const verifyAssessmentAccess = async (req, res, next) => {
   try {
     const { role, userId } = req.user;
@@ -260,7 +320,6 @@ export const verifyAssessmentAccess = async (req, res, next) => {
       return next();
     }
 
-    // Get the assessment with student's school
     const assessment = await prisma.assessment.findUnique({
       where: { id: assessmentId },
       select: {
@@ -276,8 +335,24 @@ export const verifyAssessmentAccess = async (req, res, next) => {
       });
     }
 
-    // Verify user has access to student's school
+    if (role === 'COUNTRY_ADMIN') {
+      const userCountryIds = await getCountryIdsForUser(userId);
+      req.userCountryIds = userCountryIds;
+
+      const schoolCountryId = await getSchoolCountryId(assessment.student.schoolId);
+      if (!schoolCountryId || !userCountryIds.includes(schoolCountryId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have access to this assessment.',
+        });
+      }
+
+      return next();
+    }
+
+    // SCHOOL_ADMIN and TEACHER
     const userSchoolIds = await getSchoolIdsForUser(userId);
+    req.userSchoolIds = userSchoolIds;
 
     if (!userSchoolIds.includes(assessment.student.schoolId)) {
       return res.status(403).json({
@@ -286,9 +361,8 @@ export const verifyAssessmentAccess = async (req, res, next) => {
       });
     }
 
-    // For teachers, verify they created this assessment (for updates)
+    // For teachers, verify they created this assessment (for non-GET requests)
     if (role === 'TEACHER' && assessment.createdBy !== userId) {
-      // Allow teachers to view but not modify other teachers' assessments
       if (req.method !== 'GET') {
         return res.status(403).json({
           success: false,
@@ -297,7 +371,6 @@ export const verifyAssessmentAccess = async (req, res, next) => {
       }
     }
 
-    req.userSchoolIds = userSchoolIds;
     next();
   } catch (error) {
     return res.status(500).json({
