@@ -34,6 +34,7 @@ import TeacherWelcome from './TeacherWelcome';
 import AppFooter from './AppFooter';
 import { saveSession, getSession } from '../utils/sessionStorage';
 import { exportStudentReportPDF } from '../utils/pdfExport';
+import { reportsAPI } from '../api/reports';
 import { calculateClassStatistics, calculateRatingDistribution, calculateProgressBySubject } from '../utils/analyticsCalculations';
 import { ReportDashboard } from './reports';
 import { useStrands } from '../hooks/useCurriculum';
@@ -472,6 +473,35 @@ const DesktopAssessmentApp = () => {
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'class-management', label: 'Class Management', icon: GraduationCap },
   ];
+
+  // Parent report download state
+  const [downloadingParentReport, setDownloadingParentReport] = useState(false);
+
+  // Server-side parent report PDF (polished, formatted for sharing with parents)
+  const handleDownloadParentReport = async () => {
+    if (!selectedStudent) {
+      toast.warning('Please select a student first');
+      return;
+    }
+    if (!selectedTerm) {
+      toast.warning('Please select a term first');
+      return;
+    }
+    setDownloadingParentReport(true);
+    try {
+      const studentObj = students.find(s => s.id === selectedStudent);
+      await reportsAPI.downloadReport(
+        'student',
+        'pdf',
+        { studentId: selectedStudent, termId: selectedTerm },
+        { studentName: studentObj ? `${studentObj.firstName} ${studentObj.lastName}` : '' }
+      );
+    } catch (err) {
+      toast.error(err.message || 'Failed to generate parent report');
+    } finally {
+      setDownloadingParentReport(false);
+    }
+  };
 
   // PDF Export Handler
   const handleExportPDF = () => {
@@ -1474,13 +1504,26 @@ const DesktopAssessmentApp = () => {
               {navItems.find(n => n.id === currentView)?.label}
             </h2>
             {selectedStudentObj && currentView === 'learner-reports' && (
-              <button
-                onClick={handleExportPDF}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded text-xs sm:text-sm hover:bg-blue-700"
-              >
-                <Download size={16} />
-                <span className="hidden sm:inline">Export PDF</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownloadParentReport}
+                  disabled={downloadingParentReport}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-[#7CB342] text-white rounded text-xs sm:text-sm hover:bg-[#6aa030] disabled:opacity-50"
+                  title="Download a formatted PDF report to share with parents"
+                >
+                  <Download size={16} />
+                  <span className="hidden sm:inline">
+                    {downloadingParentReport ? 'Generating...' : 'Parent Report'}
+                  </span>
+                </button>
+                <button
+                  onClick={handleExportPDF}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded text-xs sm:text-sm hover:bg-blue-700"
+                >
+                  <Download size={16} />
+                  <span className="hidden sm:inline">Export PDF</span>
+                </button>
+              </div>
             )}
           </div>
 

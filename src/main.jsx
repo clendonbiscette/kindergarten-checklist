@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/react'
 import { AuthProvider } from './contexts/AuthContext'
 import { ToastProvider } from './contexts/ToastContext'
 import ErrorBoundary from './components/ErrorBoundary'
+import OfflineBanner from './components/OfflineBanner'
 import './index.css'
 import App from './App.jsx'
 
@@ -29,6 +30,7 @@ createRoot(document.getElementById('root')).render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <ToastProvider>
+            <OfflineBanner />
             <App />
           </ToastProvider>
         </AuthProvider>
