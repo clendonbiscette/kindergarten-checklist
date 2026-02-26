@@ -10,6 +10,8 @@ import ForgotPassword from './components/ForgotPassword'
 import ResetPassword from './components/ResetPassword'
 import VerifyEmail from './components/VerifyEmail'
 import PendingAssignment from './components/PendingAssignment'
+import TeacherOnboardingWizard from './components/TeacherOnboardingWizard'
+import ParentPlaceholder from './components/ParentPlaceholder'
 import LoadingSpinner from './components/LoadingSpinner'
 import apiClient from './api/client'
 
@@ -17,6 +19,7 @@ function App() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const [schoolData, setSchoolData] = useState(null)
   const [checkingSchool, setCheckingSchool] = useState(false)
+  const [hasClasses, setHasClasses] = useState(null) // null = not checked yet
 
   // For School Admins, check if they have a school assigned
   useEffect(() => {
@@ -43,6 +46,22 @@ function App() {
       checkSchoolAssignment()
     }
   }, [isAuthenticated, user?.role])
+
+  // For Teachers with a school assigned, check if they have any classes
+  useEffect(() => {
+    const checkTeacherClasses = async () => {
+      try {
+        const res = await apiClient.get('/classes')
+        setHasClasses(res.success && res.data?.length > 0)
+      } catch {
+        setHasClasses(true) // On error assume they have classes to avoid blocking
+      }
+    }
+
+    if (isAuthenticated && user?.role === 'TEACHER' && user?.schoolId) {
+      checkTeacherClasses()
+    }
+  }, [isAuthenticated, user?.role, user?.schoolId])
 
   // Handle public path-based routes before auth check
   const path = window.location.pathname
@@ -85,12 +104,27 @@ function App() {
     return <SchoolAdminDashboard schoolData={schoolData} />
   }
 
+  // PARENT_STUDENT role: no app access, show informational placeholder
+  if (user?.role === 'PARENT_STUDENT') {
+    return <ParentPlaceholder />
+  }
+
   // TEACHER role: if not assigned to a school yet, show pending screen
   if (user?.role === 'TEACHER' && !user?.schoolId) {
     return <PendingAssignment />
   }
 
-  // Default: Teacher view
+  // TEACHER role with school: check for classes (first-time onboarding)
+  if (user?.role === 'TEACHER' && user?.schoolId) {
+    if (hasClasses === null) {
+      return <LoadingSpinner fullScreen message="Loading your classroom..." />
+    }
+    if (hasClasses === false) {
+      return <TeacherOnboardingWizard onComplete={() => setHasClasses(true)} />
+    }
+  }
+
+  // Default: Teacher assessment view
   return <DesktopAssessmentApp />
 }
 

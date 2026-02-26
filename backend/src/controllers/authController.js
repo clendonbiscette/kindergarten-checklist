@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { generateTokenPair, verifyRefreshToken } from '../utils/jwt.js';
 import prisma from '../utils/prisma.js';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/email.js';
+import { sendVerificationEmail, sendPasswordResetEmail, sendSchoolAdminInviteEmail } from '../utils/email.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
@@ -478,6 +478,175 @@ export const resetPassword = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Password updated successfully. You can now log in with your new password.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Create a School Admin account and assign them to a school
+// Protected: COUNTRY_ADMIN, SCHOOL_ADMIN, SUPERUSER
+export const createSchoolAdmin = async (req, res, next) => {
+  try {
+    const { firstName, lastName, email, schoolId } = req.body;
+    const { role: requesterRole, userId: requesterId } = req.user;
+
+    if (!firstName || !lastName || !email || !schoolId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: firstName, lastName, email, schoolId',
+      });
+    }
+
+    // Find the school
+    const school = await prisma.school.findUnique({ where: { id: schoolId } });
+    if (!school) {
+      return res.status(404).json({ success: false, message: 'School not found' });
+    }
+
+    // COUNTRY_ADMIN scope: can only create admins for schools in their assigned countries
+    if (requesterRole === 'COUNTRY_ADMIN') {
+      const countryAssignment = await prisma.userAssignment.findFirst({
+        where: { userId: requesterId, countryId: school.countryId },
+      });
+      if (!countryAssignment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not authorized to create admins for this school.',
+        });
+      }
+    }
+
+    // SCHOOL_ADMIN scope: can only create admins for their own school
+    if (requesterRole === 'SCHOOL_ADMIN') {
+      const schoolAssignment = await prisma.userAssignment.findFirst({
+        where: { userId: requesterId, schoolId },
+      });
+      if (!schoolAssignment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not authorized to create admins for this school.',
+        });
+      }
+    }
+
+    // Check email uniqueness
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'An account with this email already exists',
+      });
+    }
+
+    // Generate a random temp password — admin will set their own via the setup link
+    const tempPassword = randomBytes(16).toString('hex');
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(tempPassword, salt);
+
+    // Generate a 7-day account setup token (re-uses the password reset flow)
+    const passwordResetToken = randomBytes(32).toString('hex');
+    const passwordResetExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const newAdmin = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email,
+          passwordHash,
+          firstName,
+          lastName,
+          role: 'SCHOOL_ADMIN',
+          emailVerified: true,
+          passwordResetToken,
+          passwordResetExpires,
+        },
+      });
+      await tx.userAssignment.create({ data: { userId: user.id, schoolId } });
+      return user;
+    });
+
+    // Send invite email with setup link
+    const setupUrl = `${FRONTEND_URL}/reset-password?token=${passwordResetToken}`;
+    try {
+      await sendSchoolAdminInviteEmail(email, { firstName, schoolName: school.name, setupUrl });
+    } catch (emailError) {
+      console.error('Failed to send school admin invite email:', emailError);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `School admin account created for ${firstName} ${lastName}. A setup link has been sent to ${email}.`,
+      data: {
+        id: newAdmin.id,
+        email: newAdmin.email,
+        firstName: newAdmin.firstName,
+        lastName: newAdmin.lastName,
+        role: newAdmin.role,
+        schoolId,
+        schoolName: school.name,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Teacher self-assigns to a school (for teachers who registered without a school)
+export const assignSchool = async (req, res, next) => {
+  try {
+    const { schoolId } = req.body;
+    const userId = req.user.userId;
+
+    if (!schoolId) {
+      return res.status(400).json({ success: false, message: 'schoolId is required' });
+    }
+
+    const school = await prisma.school.findUnique({ where: { id: schoolId } });
+    if (!school) {
+      return res.status(404).json({ success: false, message: 'School not found' });
+    }
+
+    // Create assignment if it doesn't already exist
+    const existing = await prisma.userAssignment.findFirst({ where: { userId, schoolId } });
+    if (!existing) {
+      await prisma.userAssignment.create({ data: { userId, schoolId } });
+    }
+
+    // Fetch full user with updated assignments to build fresh token payload
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        assignments: {
+          include: {
+            school: { include: { country: true } },
+            country: true,
+          },
+        },
+      },
+    });
+
+    const tokens = generateTokenPair(user.id, user.email, user.role);
+    const schoolAssignment = user.assignments?.find(a => a.school);
+    const countryAssignment = user.assignments?.find(a => a.country);
+
+    res.status(200).json({
+      success: true,
+      message: `You've been assigned to ${school.name}.`,
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          schoolId: schoolAssignment?.school?.id || null,
+          schoolName: schoolAssignment?.school?.name || null,
+          countryId: schoolAssignment?.school?.country?.id || countryAssignment?.country?.id || null,
+          countryName: schoolAssignment?.school?.country?.name || countryAssignment?.country?.name || null,
+        },
+        token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      },
     });
   } catch (error) {
     next(error);

@@ -2,8 +2,9 @@ import express from 'express';
 import {
   register, login, getProfile, registerTeacher, refreshToken,
   verifyEmail, resendVerification, forgotPassword, resetPassword,
+  assignSchool, createSchoolAdmin,
 } from '../controllers/authController.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, authorize } from '../middleware/auth.js';
 import {
   validateRegister, validateLogin, validateRefreshToken, validateTeacherRegister,
   validateVerifyEmail, validateForgotPassword, validateResetPassword,
@@ -27,5 +28,7 @@ router.post('/reset-password', validateResetPassword, resetPassword);
 
 // Protected routes
 router.get('/profile', authenticate, getProfile);
+router.post('/assign-school', authenticate, authorize('TEACHER'), assignSchool);
+router.post('/create-school-admin', authenticate, authorize('SUPERUSER', 'COUNTRY_ADMIN', 'SCHOOL_ADMIN'), createSchoolAdmin);
 
 export default router;

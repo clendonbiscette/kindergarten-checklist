@@ -89,6 +89,38 @@ const DesktopAssessmentApp = () => {
   const [tempComments, setTempComments] = useState({});
   const [focusedOutcomeId, setFocusedOutcomeId] = useState(null);
 
+  // Draft auto-save — restore banner shown when a saved draft exists
+  const [draftBanner, setDraftBanner] = useState(() => {
+    try {
+      const raw = localStorage.getItem('ohpc_draft_assessments');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
+
+  // Write draft on every tempAssessments change
+  useEffect(() => {
+    if (Object.keys(tempAssessments).length > 0) {
+      localStorage.setItem('ohpc_draft_assessments', JSON.stringify({
+        classId: selectedClassId,
+        studentId: selectedStudent,
+        data: tempAssessments,
+        savedAt: new Date().toISOString(),
+      }));
+    }
+  }, [tempAssessments]);
+
+  const handleRestoreDraft = () => {
+    if (draftBanner?.data) {
+      setTempAssessments(draftBanner.data);
+    }
+    setDraftBanner(null);
+  };
+
+  const handleDismissDraft = () => {
+    localStorage.removeItem('ohpc_draft_assessments');
+    setDraftBanner(null);
+  };
+
   // Fetch data with React Query
   const { data: countries = [], isLoading: loadingCountries } = useCountries();
   const { data: schools = [] } = useSchools(selectedCountry ? { countryId: selectedCountry } : {});
@@ -307,6 +339,11 @@ const DesktopAssessmentApp = () => {
       const newTemp = { ...tempAssessments };
       delete newTemp[outcome.id];
       setTempAssessments(newTemp);
+      // Clear the draft once all pending assessments have been saved
+      if (Object.keys(newTemp).length === 0) {
+        localStorage.removeItem('ohpc_draft_assessments');
+        setDraftBanner(null);
+      }
 
       const newComments = { ...tempComments };
       delete newComments[outcome.id];
@@ -1491,6 +1528,29 @@ const DesktopAssessmentApp = () => {
                   <p className="text-blue-700 text-xs mt-0.5">
                     You haven't been assigned to a class. Please contact your school administrator to set this up.
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* Draft restore banner — shown when unsaved assessments from a previous session exist */}
+            {draftBanner && currentView === 'data-entry' && (
+              <div className="mb-3 flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                <p className="text-sm text-amber-800">
+                  <span className="font-medium">Unsaved assessments</span> from a previous session were found.
+                </p>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={handleRestoreDraft}
+                    className="text-sm font-medium text-amber-900 underline hover:text-amber-700"
+                  >
+                    Restore
+                  </button>
+                  <button
+                    onClick={handleDismissDraft}
+                    className="text-sm text-amber-600 hover:text-amber-800"
+                  >
+                    Dismiss
+                  </button>
                 </div>
               </div>
             )}

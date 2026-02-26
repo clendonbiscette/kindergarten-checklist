@@ -7,6 +7,7 @@ import {
   getSchoolTerms,
   createTerm,
   createMySchool,
+  claimSchool,
   updateMySchool,
   getMySchool,
   getCountryAdminOverview,
@@ -25,6 +26,7 @@ router.use(authenticate);
 // My School (for School Admin onboarding and management)
 router.get('/my-school', authorize('SCHOOL_ADMIN'), getMySchool);
 router.post('/my-school', authorize('SCHOOL_ADMIN'), createMySchool);
+router.post('/claim-school', authorize('SCHOOL_ADMIN'), claimSchool);
 router.put('/my-school', authorize('SCHOOL_ADMIN'), updateMySchool);
 
 // Country Admin overview (assigned countries + schools + stats)

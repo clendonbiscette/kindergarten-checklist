@@ -126,7 +126,6 @@ export const createStudent = async (req, res, next) => {
       firstName,
       lastName,
       dateOfBirth,
-      studentIdNumber,
       schoolId,
       classId,
     } = req.body;
@@ -140,12 +139,17 @@ export const createStudent = async (req, res, next) => {
       schoolId = assignment?.schoolId || null;
     }
 
-    if (!firstName || !lastName || !studentIdNumber || !schoolId) {
+    if (!firstName || !lastName || !schoolId) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: firstName, lastName, studentIdNumber, schoolId',
+        message: 'Missing required fields: firstName, lastName, schoolId',
       });
     }
+
+    // Always auto-generate student ID — uniform, no teacher input required
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const studentIdNumber = `STU-${timestamp}-${random}`;
 
     // If classId provided, verify it exists and belongs to the same school
     if (classId) {
@@ -168,39 +172,40 @@ export const createStudent = async (req, res, next) => {
       }
     }
 
-    const student = await prisma.student.create({
-      data: {
-        firstName,
-        lastName,
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        studentIdNumber,
-        schoolId,
-        ...(classId && { classId }),
-      },
-      include: {
-        school: {
-          select: {
-            name: true,
+    let student;
+    try {
+      student = await prisma.student.create({
+        data: {
+          firstName,
+          lastName,
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+          studentIdNumber,
+          schoolId,
+          ...(classId && { classId }),
+        },
+        include: {
+          school: {
+            select: {
+              name: true,
+            },
+          },
+          class: {
+            select: {
+              name: true,
+              gradeLevel: true,
+            },
           },
         },
-        class: {
-          select: {
-            name: true,
-            gradeLevel: true,
-          },
-        },
-      },
-    });
-
-    // Audit log - uncomment after migration
-    // await createAuditLog({
-    //   tableName: 'Student',
-    //   recordId: student.id,
-    //   action: 'CREATE',
-    //   newValues: student,
-    //   userId: req.user.userId,
-    //   req,
-    // });
+      });
+    } catch (dbError) {
+      if (dbError.code === 'P2002') {
+        return res.status(400).json({
+          success: false,
+          message: `A student with ID "${studentIdNumber}" already exists at this school. Please use a different ID number.`,
+        });
+      }
+      throw dbError;
+    }
 
     res.status(201).json({
       success: true,

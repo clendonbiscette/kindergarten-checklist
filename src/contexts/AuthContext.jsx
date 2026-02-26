@@ -88,6 +88,54 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  // Re-fetches profile from server and updates stored user — use after role/assignment changes
+  const refreshUser = async () => {
+    try {
+      const response = await authAPI.getProfile();
+      if (response.success && response.data) {
+        const profile = response.data;
+        const schoolAssignment = profile.assignments?.find(a => a.school);
+        const countryAssignment = profile.assignments?.find(a => a.country);
+        const updatedUser = {
+          ...user,
+          schoolId: schoolAssignment?.school?.id || null,
+          schoolName: schoolAssignment?.school?.name || null,
+          countryId:
+            schoolAssignment?.school?.country?.id ||
+            countryAssignment?.country?.id ||
+            null,
+          countryName:
+            schoolAssignment?.school?.country?.name ||
+            countryAssignment?.country?.name ||
+            null,
+        };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        return { success: true, user: updatedUser };
+      }
+      return { success: false };
+    } catch {
+      return { success: false };
+    }
+  };
+
+  // Teacher self-assigns to a school (issues new tokens with updated schoolId)
+  const assignSchool = async (schoolId) => {
+    try {
+      const response = await authAPI.assignSchool(schoolId);
+      if (response.success) {
+        setUser(response.data.user);
+        return { success: true };
+      }
+      return { success: false, message: response.message };
+    } catch (error) {
+      return {
+        success: false,
+        message: error?.message || 'Failed to assign school',
+      };
+    }
+  };
+
   const value = {
     user,
     isAuthenticated: !!user,
@@ -96,6 +144,8 @@ export const AuthProvider = ({ children }) => {
     register,
     registerTeacher,
     logout,
+    refreshUser,
+    assignSchool,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

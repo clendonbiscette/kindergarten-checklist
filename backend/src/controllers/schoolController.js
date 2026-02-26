@@ -1,5 +1,21 @@
 import prisma from '../utils/prisma.js';
 
+// Returns name, schoolYear, startDate, endDate for the current academic year.
+// Academic year starts in September — so Feb 2026 → 2025-26.
+function getCurrentAcademicYear() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-indexed; Sep = 8
+  const startYear = month >= 8 ? year : year - 1;
+  const endYear = startYear + 1;
+  return {
+    schoolYear: `${startYear}-${String(endYear).slice(2)}`,
+    name: `Academic Year ${startYear}-${String(endYear).slice(2)}`,
+    startDate: new Date(`${startYear}-09-01`),
+    endDate: new Date(`${endYear}-07-31`),
+  };
+}
+
 // Get all countries
 export const getCountries = async (req, res, next) => {
   try {
@@ -106,6 +122,19 @@ export const createSchool = async (req, res, next) => {
       });
     }
 
+    // COUNTRY_ADMIN scope check: they can only create schools in their assigned countries
+    if (req.user.role === 'COUNTRY_ADMIN') {
+      const countryAssignment = await prisma.userAssignment.findFirst({
+        where: { userId: req.user.userId, countryId },
+      });
+      if (!countryAssignment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not assigned to this country.',
+        });
+      }
+    }
+
     const school = await prisma.school.create({
       data: {
         name,
@@ -117,6 +146,12 @@ export const createSchool = async (req, res, next) => {
       include: {
         country: true,
       },
+    });
+
+    // Auto-create a default academic term so teachers can record assessments immediately
+    const termData = getCurrentAcademicYear();
+    await prisma.academicTerm.create({
+      data: { ...termData, schoolId: school.id },
     });
 
     res.status(201).json({
@@ -180,7 +215,7 @@ export const createMySchool = async (req, res, next) => {
       });
     }
 
-    // Create school and assignment in a transaction
+    // Create school, assignment, and default term in a transaction
     const result = await prisma.$transaction(async (tx) => {
       // Create the school
       const school = await tx.school.create({
@@ -202,6 +237,12 @@ export const createMySchool = async (req, res, next) => {
           userId,
           schoolId: school.id,
         },
+      });
+
+      // Auto-create default academic term
+      const termData = getCurrentAcademicYear();
+      await tx.academicTerm.create({
+        data: { ...termData, schoolId: school.id },
       });
 
       return school;
@@ -398,6 +439,69 @@ export const getCountryAdminOverview = async (req, res, next) => {
           totalAdmins,
         },
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Claim an existing school (for School Admin onboarding with pre-seeded schools)
+export const claimSchool = async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+    const { schoolId } = req.body;
+
+    if (!schoolId) {
+      return res.status(400).json({ success: false, message: 'schoolId is required' });
+    }
+
+    // Check if this admin already has a school assignment
+    const existingAssignment = await prisma.userAssignment.findFirst({
+      where: { userId, schoolId: { not: null } },
+      include: { school: true },
+    });
+
+    if (existingAssignment) {
+      return res.status(400).json({
+        success: false,
+        message: `You are already assigned to ${existingAssignment.school.name}. Please log out and back in if this seems wrong.`,
+      });
+    }
+
+    // Find the target school
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      include: { country: true },
+    });
+
+    if (!school) {
+      return res.status(404).json({ success: false, message: 'School not found' });
+    }
+
+    // Check if school already has other SCHOOL_ADMIN users (for notice, not a blocker)
+    const existingAdminCount = await prisma.userAssignment.count({
+      where: { schoolId, user: { role: 'SCHOOL_ADMIN' } },
+    });
+
+    // Create the UserAssignment
+    await prisma.userAssignment.create({
+      data: { userId, schoolId },
+    });
+
+    // Auto-create default term if school doesn't have one yet
+    const termCount = await prisma.academicTerm.count({ where: { schoolId } });
+    if (termCount === 0) {
+      const termData = getCurrentAcademicYear();
+      await prisma.academicTerm.create({ data: { ...termData, schoolId } });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: existingAdminCount > 0
+        ? `You've been added as a co-administrator for ${school.name}.`
+        : `You are now the administrator for ${school.name}.`,
+      data: school,
+      hasCoAdmin: existingAdminCount > 0,
     });
   } catch (error) {
     next(error);

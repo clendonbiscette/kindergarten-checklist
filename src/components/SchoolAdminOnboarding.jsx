@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { School, MapPin, Phone, Mail, Globe, ArrowRight, CheckCircle, Users, ClipboardList } from 'lucide-react';
-import { useCountries } from '../hooks/useSchools';
+import { School, Search, MapPin, Phone, Mail, Globe, Plus } from 'lucide-react';
+import { useCountries, usePublicSchools } from '../hooks/useSchools';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import apiClient from '../api/client';
@@ -9,7 +9,16 @@ const SchoolAdminOnboarding = ({ onComplete }) => {
   const { user } = useAuth();
   const toast = useToast();
   const { data: countries = [], isLoading: loadingCountries } = useCountries();
+  const { data: allSchools = [], isLoading: loadingSchools } = usePublicSchools({});
 
+  // Claim flow state
+  const [mode, setMode] = useState('claim'); // 'claim' | 'create'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCountryId, setSelectedCountryId] = useState('');
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [claimError, setClaimError] = useState('');
+
+  // Create flow state
   const [formData, setFormData] = useState({
     name: '',
     countryId: '',
@@ -19,211 +28,277 @@ const SchoolAdminOnboarding = ({ onComplete }) => {
     email: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [createError, setCreateError] = useState('');
 
-  const handleSubmit = async (e) => {
+  // Filtered schools for claim flow
+  const filteredSchools = allSchools.filter(school => {
+    const matchesCountry = !selectedCountryId || school.countryId === selectedCountryId;
+    const matchesSearch = !searchQuery ||
+      school.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCountry && matchesSearch;
+  });
+
+  const handleClaim = async (schoolId, schoolName) => {
+    setClaimError('');
+    setIsClaiming(true);
+    try {
+      const response = await apiClient.post('/schools/claim-school', { schoolId });
+      if (response.success) {
+        const notice = response.hasCoAdmin
+          ? `You've been added as a co-administrator for ${schoolName}.`
+          : `You are now the administrator for ${schoolName}.`;
+        toast.success(notice, 'School Claimed');
+        onComplete(response.data);
+      } else {
+        setClaimError(response.message || 'Failed to claim school');
+      }
+    } catch (err) {
+      setClaimError(err.message || 'Failed to claim school');
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
+  const handleCreate = async (e) => {
     e.preventDefault();
-    setError('');
+    setCreateError('');
     setIsSubmitting(true);
-
     try {
       const response = await apiClient.post('/schools/my-school', formData);
       if (response.success) {
         toast.success('School created successfully! Welcome to your dashboard.', 'School Created');
         onComplete(response.data);
       } else {
-        setError(response.message || 'Failed to create school');
+        setCreateError(response.message || 'Failed to create school');
       }
     } catch (err) {
-      setError(err.message || 'Failed to create school');
+      setCreateError(err.message || 'Failed to create school');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (loadingCountries) {
+  if (loadingCountries || loadingSchools) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-700">
-        <div className="text-white text-xl">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1E3A5F] to-[#2D4A6F]">
+        <div className="text-white text-lg">Loading schools...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-indigo-700 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#1E3A5F] to-[#2D4A6F] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6 text-white">
-          <div className="flex items-center gap-3 mb-2">
-            <School size={32} />
-            <h1 className="text-2xl font-bold">Welcome, {user?.firstName}!</h1>
+        <div className="bg-[#1E3A5F] px-8 py-6 text-white">
+          <div className="flex items-center gap-3 mb-1">
+            <School size={28} />
+            <h1 className="text-xl font-bold">Welcome, {user?.firstName}!</h1>
           </div>
-          <p className="text-blue-100">
-            Let's set up your school in the OHPC Kindergarten Assessment System.
+          <p className="text-blue-200 text-sm">
+            Find your school below to get started.
           </p>
         </div>
 
-        {/* Getting Started Info */}
-        <div className="px-8 py-4 bg-gray-50 border-b">
-          <p className="text-sm text-gray-600 mb-3">After creating your school, you'll be able to:</p>
-          <div className="flex flex-wrap items-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
-                <Users size={16} />
-              </div>
-              <span className="text-sm text-gray-700">Manage teachers & students</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
-                <School size={16} />
-              </div>
-              <span className="text-sm text-gray-700">Create classes & terms</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
-                <ClipboardList size={16} />
-              </div>
-              <span className="text-sm text-gray-700">Track assessments</span>
-            </div>
-          </div>
+        {/* Mode tabs */}
+        <div className="flex border-b">
+          <button
+            onClick={() => setMode('claim')}
+            className={`flex-1 py-3 text-sm font-medium transition-colors ${
+              mode === 'claim'
+                ? 'border-b-2 border-[#1E3A5F] text-[#1E3A5F]'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Find my school
+          </button>
+          <button
+            onClick={() => setMode('create')}
+            className={`flex-1 py-3 text-sm font-medium transition-colors ${
+              mode === 'create'
+                ? 'border-b-2 border-[#1E3A5F] text-[#1E3A5F]'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            School not listed? Create it
+          </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
-          {error && (
-            <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-              {error}
+        {/* Claim mode */}
+        {mode === 'claim' && (
+          <div className="p-6">
+            {claimError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                {claimError}
+              </div>
+            )}
+
+            {/* Filters */}
+            <div className="flex gap-3 mb-4">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search by school name..."
+                  className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+              <select
+                value={selectedCountryId}
+                onChange={e => setSelectedCountryId(e.target.value)}
+                className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:border-[#1E3A5F] focus:outline-none"
+              >
+                <option value="">All countries</option>
+                {countries.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
             </div>
-          )}
 
-          {/* Country Selection */}
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-              <Globe size={16} />
-              Country <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={formData.countryId}
-              onChange={(e) => setFormData({ ...formData, countryId: e.target.value })}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
-              required
-            >
-              <option value="">Select your country...</option>
-              {countries.map((country) => (
-                <option key={country.id} value={country.id}>
-                  {country.name}
-                </option>
-              ))}
-            </select>
+            {/* School list */}
+            <div className="max-h-72 overflow-y-auto border border-gray-200 rounded-lg divide-y">
+              {filteredSchools.length === 0 ? (
+                <div className="p-6 text-center text-gray-500 text-sm">
+                  No schools found. Try a different search or{' '}
+                  <button
+                    onClick={() => setMode('create')}
+                    className="text-[#1E3A5F] font-medium hover:underline"
+                  >
+                    create your school
+                  </button>
+                  .
+                </div>
+              ) : (
+                filteredSchools.slice(0, 50).map(school => (
+                  <div
+                    key={school.id}
+                    className="flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{school.name}</p>
+                      <p className="text-xs text-gray-400">{school.country?.name}</p>
+                    </div>
+                    <button
+                      onClick={() => handleClaim(school.id, school.name)}
+                      disabled={isClaiming}
+                      className="text-xs bg-[#1E3A5F] text-white px-3 py-1.5 rounded-md hover:bg-[#2D4A6F] transition-colors disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {isClaiming ? 'Claiming...' : 'This is my school'}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            {filteredSchools.length > 50 && (
+              <p className="text-xs text-gray-400 mt-2 text-center">
+                Showing 50 of {filteredSchools.length} results. Use search to narrow down.
+              </p>
+            )}
           </div>
+        )}
 
-          {/* School Name */}
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-              <School size={16} />
-              School Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g., Castries Primary School"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
-              required
-            />
-          </div>
+        {/* Create mode */}
+        {mode === 'create' && (
+          <form onSubmit={handleCreate} className="p-6 space-y-4">
+            {createError && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                {createError}
+              </div>
+            )}
 
-          {/* District/Town */}
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-              <MapPin size={16} />
-              District / Town <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.district}
-              onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-              placeholder="e.g., Castries, Roseau, St. George's"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
-              required
-            />
-          </div>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+              Only use this if your school is genuinely not in the list.{' '}
+              <button type="button" onClick={() => setMode('claim')} className="font-medium underline">
+                Search for it first
+              </button>
+              .
+            </div>
 
-          {/* Address (Optional) */}
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-              <MapPin size={16} />
-              Full Address <span className="text-gray-400 text-xs">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              placeholder="Street address"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
-            />
-          </div>
-
-          {/* Contact Info */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                <Phone size={16} />
-                Phone <span className="text-gray-400 text-xs">(optional)</span>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
+                <Globe size={14} /> Country <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.countryId}
+                onChange={e => setFormData({ ...formData, countryId: e.target.value })}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:border-[#1E3A5F] focus:outline-none text-sm"
+                required
+              >
+                <option value="">Select your country...</option>
+                {countries.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
+                <School size={14} /> School Name <span className="text-red-500">*</span>
               </label>
               <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="School phone number"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
+                type="text"
+                value={formData.name}
+                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                placeholder="Official school name"
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:border-[#1E3A5F] focus:outline-none text-sm"
+                required
               />
             </div>
+
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                <Mail size={16} />
-                Email <span className="text-gray-400 text-xs">(optional)</span>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
+                <MapPin size={14} /> District / Town <span className="text-red-500">*</span>
               </label>
               <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="School email address"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
+                type="text"
+                value={formData.district}
+                onChange={e => setFormData({ ...formData, district: e.target.value })}
+                placeholder="e.g., Castries, Roseau, St. George's"
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:border-[#1E3A5F] focus:outline-none text-sm"
+                required
               />
             </div>
-          </div>
 
-          {/* Info Box */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <CheckCircle size={20} className="text-blue-600 mt-0.5" />
-              <div className="text-sm text-blue-800">
-                <p className="font-medium mb-1">What happens next?</p>
-                <p className="text-blue-600">
-                  Once you create your school, teachers can register and select your school from
-                  the dropdown. You'll be able to view all teachers and students at your school.
-                </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
+                  <Phone size={14} /> Phone
+                </label>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="School phone"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:border-[#1E3A5F] focus:outline-none text-sm"
+                />
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
+                  <Mail size={14} /> Email
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="School email"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:border-[#1E3A5F] focus:outline-none text-sm"
+                />
               </div>
             </div>
-          </div>
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-lg font-semibold text-lg hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isSubmitting ? (
-              'Creating School...'
-            ) : (
-              <>
-                Create School
-                <ArrowRight size={20} />
-              </>
-            )}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-[#1E3A5F] text-white py-3 rounded-lg font-semibold hover:bg-[#2D4A6F] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isSubmitting ? 'Creating School...' : (
+                <><Plus size={18} /> Create School</>
+              )}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

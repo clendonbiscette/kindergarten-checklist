@@ -40,6 +40,38 @@ export async function sendVerificationEmail(to, { firstName, verifyUrl }) {
   });
 }
 
+export async function sendSchoolAdminInviteEmail(to, { firstName, schoolName, setupUrl }) {
+  return transporter.sendMail({
+    from: FROM,
+    to,
+    subject: `You've been added as a School Administrator — OHPC Kindergarten`,
+    text: `Hi ${firstName},\n\nAn administrator has created a School Administrator account for you at ${schoolName} on the OHPC Kindergarten Assessment System.\n\nSet up your password by visiting the link below:\n\n${setupUrl}\n\nThis link expires in 7 days.\n\n— OHPC Kindergarten Team`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+        <div style="background:#1E3A5F;padding:24px;border-radius:8px 8px 0 0;text-align:center">
+          <h1 style="color:#fff;margin:0;font-size:20px">OHPC Kindergarten Progress Checklist</h1>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:32px;border-radius:0 0 8px 8px">
+          <p style="margin:0 0 16px;color:#374151">Hi ${firstName},</p>
+          <p style="margin:0 0 8px;color:#374151">You've been added as a <strong>School Administrator</strong> for:</p>
+          <p style="margin:0 0 24px;color:#1E3A5F;font-size:18px;font-weight:600">${schoolName}</p>
+          <p style="margin:0 0 24px;color:#374151">Click the button below to set your password and access the system.</p>
+          <a href="${setupUrl}"
+             style="display:inline-block;background:#7CB342;color:#fff;padding:12px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:16px">
+            Set Up My Account
+          </a>
+          <p style="margin:24px 0 0;color:#9ca3af;font-size:14px">
+            This link expires in 7 days.
+          </p>
+          <p style="margin:8px 0 0;color:#9ca3af;font-size:13px">
+            Or copy and paste this URL: <a href="${setupUrl}" style="color:#1E3A5F">${setupUrl}</a>
+          </p>
+        </div>
+      </div>
+    `,
+  });
+}
+
 export async function sendPasswordResetEmail(to, { firstName, resetUrl }) {
   return transporter.sendMail({
     from: FROM,

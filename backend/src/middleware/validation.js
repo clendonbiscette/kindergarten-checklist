@@ -77,11 +77,7 @@ export const validateCreateStudent = [
     .withMessage('Last name is required')
     .isLength({ max: 100 })
     .withMessage('Last name must not exceed 100 characters'),
-  body('studentIdNumber')
-    .trim()
-    .notEmpty()
-    .withMessage('Student ID number is required'),
-  body('schoolId').isUUID().withMessage('Valid school ID is required'),
+  body('schoolId').optional().isUUID().withMessage('schoolId must be a valid UUID'),
   body('dateOfBirth')
     .optional()
     .isISO8601()
@@ -169,7 +165,7 @@ export const validateCreateClass = [
     .trim()
     .notEmpty()
     .withMessage('Grade level is required'),
-  body('schoolId').isUUID().withMessage('Valid school ID is required'),
+  body('schoolId').optional().isUUID().withMessage('schoolId must be a valid UUID'),
   body('academicYear')
     .trim()
     .notEmpty()

@@ -53,6 +53,16 @@ export const authAPI = {
     return apiClient.get('/auth/profile');
   },
 
+  assignSchool: async (schoolId) => {
+    const response = await apiClient.post('/auth/assign-school', { schoolId });
+    if (response.success && response.data?.token) {
+      localStorage.setItem('authToken', response.data.token);
+      localStorage.setItem('refreshToken', response.data.refreshToken);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+    }
+    return response;
+  },
+
   getCurrentUser: () => {
     const userStr = localStorage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
