@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { authAPI } from '../api/auth';
 import TeacherRegistration from './TeacherRegistration';
 import { ClipboardCheck, BookOpen, Star } from 'lucide-react';
 
@@ -7,8 +8,11 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSent, setResendSent] = useState(false);
   const { login } = useAuth();
 
   if (showRegistration) {
@@ -18,15 +22,32 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setErrorCode('');
+    setResendSent(false);
     setIsLoading(true);
 
     const result = await login({ email, password });
 
     if (!result.success) {
       setError(result.message || 'Login failed. Please try again.');
+      // Preserve error code for EMAIL_NOT_VERIFIED handling
+      if (result.code) setErrorCode(result.code);
     }
 
     setIsLoading(false);
+  };
+
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    try {
+      await authAPI.resendVerification(email);
+      setResendSent(true);
+    } catch {
+      // Ignore — server always returns 200
+      setResendSent(true);
+    } finally {
+      setResendLoading(false);
+    }
   };
 
   const features = [
@@ -143,14 +164,30 @@ const Login = () => {
               />
             </div>
 
-            {error && (
+            {error && errorCode === 'EMAIL_NOT_VERIFIED' ? (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg space-y-2">
+                <p className="font-medium text-sm">{error}</p>
+                {resendSent ? (
+                  <p className="text-xs text-amber-700">A new verification link has been sent. Check your inbox.</p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendLoading}
+                    className="text-xs font-semibold text-amber-900 underline disabled:opacity-50"
+                  >
+                    {resendLoading ? 'Sending...' : 'Resend verification email'}
+                  </button>
+                )}
+              </div>
+            ) : error ? (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
                 <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                 </svg>
                 <span>{error}</span>
               </div>
-            )}
+            ) : null}
 
             <button
               type="submit"
@@ -158,6 +195,14 @@ const Login = () => {
               className="w-full bg-[#7CB342] text-white py-3 px-4 rounded-lg hover:bg-[#689F38] focus:outline-none focus:ring-2 focus:ring-[#7CB342] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg transition-colors"
             >
               {isLoading ? 'Signing in...' : 'Sign In'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/forgot-password'; }}
+              className="w-full text-center text-sm text-gray-500 hover:text-[#1E3A5F] transition-colors"
+            >
+              Forgot your password?
             </button>
           </form>
 

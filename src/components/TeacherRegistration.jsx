@@ -12,8 +12,10 @@ const TeacherRegistration = ({ onBackToLogin }) => {
     countryId: '',
     schoolId: '',
   });
+  const [schoolNotListed, setSchoolNotListed] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const { registerTeacher } = useAuth();
 
   const { data: countries = [], isLoading: countriesLoading } = useCountries();
@@ -31,14 +33,25 @@ const TeacherRegistration = ({ onBackToLogin }) => {
     }));
   };
 
+  const handleSchoolNotListedToggle = (e) => {
+    setSchoolNotListed(e.target.checked);
+    if (e.target.checked) {
+      setFormData(prev => ({ ...prev, schoolId: '' }));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
     // Validation
-    if (!formData.firstName || !formData.lastName || !formData.email ||
-        !formData.password || !formData.schoolId) {
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
       setError('Please fill in all required fields');
+      return;
+    }
+
+    if (!schoolNotListed && !formData.schoolId) {
+      setError('Please select your school or check "My school is not listed yet"');
       return;
     }
 
@@ -59,15 +72,46 @@ const TeacherRegistration = ({ onBackToLogin }) => {
       lastName: formData.lastName,
       email: formData.email,
       password: formData.password,
-      schoolId: formData.schoolId,
+      schoolId: schoolNotListed ? undefined : formData.schoolId,
     });
 
-    if (!result.success) {
+    if (result.success) {
+      setSuccess(true);
+    } else {
       setError(result.message || 'Registration failed. Please try again.');
-      setIsLoading(false);
     }
-    // If successful, AuthContext will automatically log the user in
+
+    setIsLoading(false);
   };
+
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1E3A5F] via-[#2D4A6F] to-[#1E3A5F] p-4">
+        <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center">
+          <img src="/images/logo.png" alt="OECS Logo" className="h-16 object-contain mx-auto mb-6" />
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Check your inbox!</h2>
+          <p className="text-gray-600 text-sm mb-2">
+            We've sent a verification link to <strong>{formData.email}</strong>.
+          </p>
+          <p className="text-gray-500 text-sm mb-6">
+            Click the link in the email to verify your account, then return here to log in.
+          </p>
+          <button
+            type="button"
+            onClick={onBackToLogin}
+            className="w-full bg-[#7CB342] text-white py-3 px-4 rounded-lg hover:bg-[#689F38] font-semibold transition-colors"
+          >
+            Back to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1E3A5F] via-[#2D4A6F] to-[#1E3A5F] p-4">
@@ -145,6 +189,7 @@ const TeacherRegistration = ({ onBackToLogin }) => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7CB342]"
                 placeholder="Min. 8 characters"
               />
+              <p className="text-xs text-gray-500 mt-1">Must include uppercase, lowercase, and a number</p>
             </div>
 
             <div>
@@ -166,16 +211,15 @@ const TeacherRegistration = ({ onBackToLogin }) => {
 
           <div>
             <label htmlFor="countryId" className="block text-sm font-medium text-gray-700 mb-2">
-              Country *
+              Country
             </label>
             <select
               id="countryId"
               name="countryId"
               value={formData.countryId}
               onChange={handleChange}
-              required
-              disabled={countriesLoading}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7CB342]"
+              disabled={countriesLoading || schoolNotListed}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7CB342] disabled:opacity-50 disabled:bg-gray-50"
             >
               <option value="">Select a country...</option>
               {countries.map(country => (
@@ -188,43 +232,61 @@ const TeacherRegistration = ({ onBackToLogin }) => {
 
           <div>
             <label htmlFor="schoolId" className="block text-sm font-medium text-gray-700 mb-2">
-              School *
+              School {schoolNotListed ? '' : '*'}
             </label>
-            <select
-              id="schoolId"
-              name="schoolId"
-              value={formData.schoolId}
-              onChange={handleChange}
-              required
-              disabled={!formData.countryId || schoolsLoading || (formData.countryId && schools.length === 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7CB342]"
-            >
-              <option value="">
-                {!formData.countryId
-                  ? 'Select a country first...'
-                  : schoolsLoading
-                    ? 'Loading schools...'
-                    : schools.length === 0
-                      ? 'No schools registered yet'
-                      : 'Select a school...'}
-              </option>
-              {schools.map(school => (
-                <option key={school.id} value={school.id}>
-                  {school.name}
-                </option>
-              ))}
-            </select>
-            {formData.countryId && !schoolsLoading && schools.length === 0 && (
-              <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
-                <p className="text-sm text-amber-800">
-                  <strong>No schools registered in this country yet.</strong>
-                </p>
-                <p className="text-xs text-amber-700 mt-1">
-                  Please contact your school administrator to set up your school first,
-                  or try selecting a different country.
+            {!schoolNotListed && (
+              <>
+                <select
+                  id="schoolId"
+                  name="schoolId"
+                  value={formData.schoolId}
+                  onChange={handleChange}
+                  disabled={!formData.countryId || schoolsLoading}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7CB342] disabled:opacity-50"
+                >
+                  <option value="">
+                    {!formData.countryId
+                      ? 'Select a country first...'
+                      : schoolsLoading
+                        ? 'Loading schools...'
+                        : schools.length === 0
+                          ? 'No schools registered yet'
+                          : 'Select a school...'}
+                  </option>
+                  {schools.map(school => (
+                    <option key={school.id} value={school.id}>
+                      {school.name}
+                    </option>
+                  ))}
+                </select>
+                {formData.countryId && !schoolsLoading && schools.length === 0 && (
+                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                    <p className="text-sm text-amber-800">
+                      <strong>No schools registered in this country yet.</strong>
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Check "My school is not listed yet" below to register without a school assignment.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* "My school is not listed yet" toggle */}
+            <label className="flex items-start gap-3 mt-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={schoolNotListed}
+                onChange={handleSchoolNotListedToggle}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#7CB342] focus:ring-[#7CB342]"
+              />
+              <div>
+                <span className="text-sm text-gray-700 font-medium">My school is not listed yet</span>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  You can register without a school. A school admin can assign you after your account is verified.
                 </p>
               </div>
-            )}
+            </label>
           </div>
 
           {error && (
@@ -247,7 +309,7 @@ const TeacherRegistration = ({ onBackToLogin }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="flex-1 bg-[#7CB342] text-white py-2 px-4 rounded-md hover:bg-[#6aA830] focus:outline-none focus:ring-2 focus:ring-[#7CB342] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 bg-[#7CB342] text-white py-2 px-4 rounded-md hover:bg-[#689F38] focus:outline-none focus:ring-2 focus:ring-[#7CB342] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Registering...' : 'Register as Teacher'}
             </button>

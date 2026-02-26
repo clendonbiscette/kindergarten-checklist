@@ -1,6 +1,10 @@
+import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { generateTokenPair, verifyRefreshToken } from '../utils/jwt.js';
 import prisma from '../utils/prisma.js';
+import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/email.js';
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 export const register = async (req, res, next) => {
   try {
@@ -39,7 +43,7 @@ export const register = async (req, res, next) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Create user
+    // Create user — admin-created users are pre-verified
     const user = await prisma.user.create({
       data: {
         email,
@@ -47,6 +51,7 @@ export const register = async (req, res, next) => {
         firstName,
         lastName,
         role,
+        emailVerified: true,
       },
       select: {
         id: true,
@@ -127,6 +132,15 @@ export const login = async (req, res, next) => {
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
+      });
+    }
+
+    // Check email verification (all roles — existing users are migrated to emailVerified=true)
+    if (!user.emailVerified) {
+      return res.status(403).json({
+        success: false,
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Please verify your email address before logging in. Check your inbox for a verification link.',
       });
     }
 
@@ -220,16 +234,16 @@ export const refreshToken = async (req, res) => {
   }
 };
 
-// Register teacher with school assignment
+// Register teacher with optional school assignment
 export const registerTeacher = async (req, res, next) => {
   try {
     const { email, password, firstName, lastName, schoolId } = req.body;
 
-    // Validate required fields
-    if (!email || !password || !firstName || !lastName || !schoolId) {
+    // Validate required fields (schoolId is optional)
+    if (!email || !password || !firstName || !lastName) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide all required fields: email, password, firstName, lastName, schoolId',
+        message: 'Please provide all required fields: email, password, firstName, lastName',
       });
     }
 
@@ -241,32 +255,31 @@ export const registerTeacher = async (req, res, next) => {
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: 'User with this email already exists',
+        message: 'An account with this email already exists',
       });
     }
 
-    // Verify school exists and get country info
-    const school = await prisma.school.findUnique({
-      where: { id: schoolId },
-      include: {
-        country: true,
-      },
-    });
-
-    if (!school) {
-      return res.status(404).json({
-        success: false,
-        message: 'School not found',
-      });
+    // If schoolId provided, verify the school exists
+    if (schoolId) {
+      const school = await prisma.school.findUnique({ where: { id: schoolId } });
+      if (!school) {
+        return res.status(404).json({
+          success: false,
+          message: 'School not found',
+        });
+      }
     }
 
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Create user and assignment in a transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Create teacher user
+    // Generate email verification token
+    const emailVerificationToken = randomBytes(32).toString('hex');
+    const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Create user and optional assignment in a transaction
+    await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           email,
@@ -274,46 +287,197 @@ export const registerTeacher = async (req, res, next) => {
           firstName,
           lastName,
           role: 'TEACHER',
-        },
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          role: true,
-          isActive: true,
-          createdAt: true,
+          emailVerified: false,
+          emailVerificationToken,
+          emailVerificationExpires,
         },
       });
 
-      // Assign teacher to school
-      await tx.userAssignment.create({
-        data: {
-          userId: user.id,
-          schoolId,
-        },
-      });
+      // Only create school assignment if schoolId was provided
+      if (schoolId) {
+        await tx.userAssignment.create({
+          data: {
+            userId: user.id,
+            schoolId,
+          },
+        });
+      }
 
       return user;
     });
 
-    // Generate token pair
-    const tokens = generateTokenPair(result.id, result.email, result.role);
+    // Send verification email (outside transaction — don't fail registration if email fails)
+    const verifyUrl = `${FRONTEND_URL}/verify-email?token=${emailVerificationToken}`;
+    try {
+      await sendVerificationEmail(email, { firstName, verifyUrl });
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError);
+      // Registration still succeeded — user can request resend
+    }
 
     res.status(201).json({
       success: true,
-      message: 'Teacher registered and assigned to school successfully',
-      data: {
-        user: {
-          ...result,
-          schoolId: school.id,
-          schoolName: school.name,
-          countryId: school.country.id,
-          countryName: school.country.name,
-        },
-        token: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+      message: 'Registration successful! Please check your email to verify your account before logging in.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Verify email address via token
+export const verifyEmail = async (req, res, next) => {
+  try {
+    const { token } = req.query;
+
+    const user = await prisma.user.findFirst({
+      where: {
+        emailVerificationToken: token,
+        emailVerificationExpires: { gt: new Date() },
       },
+      select: { id: true, emailVerified: true },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'This verification link is invalid or has expired.',
+      });
+    }
+
+    if (user.emailVerified) {
+      return res.status(200).json({
+        success: true,
+        message: 'Your email is already verified. You can log in.',
+      });
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationExpires: null,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Email verified successfully! You can now log in.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Resend verification email
+export const resendVerification = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    // Always return 200 to avoid leaking whether an email exists
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, firstName: true, emailVerified: true },
+    });
+
+    if (user && !user.emailVerified) {
+      const emailVerificationToken = randomBytes(32).toString('hex');
+      const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerificationToken, emailVerificationExpires },
+      });
+
+      const verifyUrl = `${FRONTEND_URL}/verify-email?token=${emailVerificationToken}`;
+      try {
+        await sendVerificationEmail(email, { firstName: user.firstName, verifyUrl });
+      } catch (emailError) {
+        console.error('Failed to resend verification email:', emailError);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "If an unverified account exists for that email, we've sent a new verification link.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Request password reset
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    // Always return 200 to avoid leaking whether an email exists
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, firstName: true, isActive: true },
+    });
+
+    if (user && user.isActive) {
+      const passwordResetToken = randomBytes(32).toString('hex');
+      const passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordResetToken, passwordResetExpires },
+      });
+
+      const resetUrl = `${FRONTEND_URL}/reset-password?token=${passwordResetToken}`;
+      try {
+        await sendPasswordResetEmail(email, { firstName: user.firstName, resetUrl });
+      } catch (emailError) {
+        console.error('Failed to send password reset email:', emailError);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "If an account exists for that email, we've sent a password reset link.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Reset password via token
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { token, password } = req.body;
+
+    const user = await prisma.user.findFirst({
+      where: {
+        passwordResetToken: token,
+        passwordResetExpires: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'This password reset link is invalid or has expired.',
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        passwordResetToken: null,
+        passwordResetExpires: null,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Password updated successfully. You can now log in with your new password.',
     });
   } catch (error) {
     next(error);

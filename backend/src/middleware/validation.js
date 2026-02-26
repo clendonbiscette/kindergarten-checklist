@@ -274,8 +274,45 @@ export const validateTeacherRegister = [
     .isLength({ max: 100 })
     .withMessage('Last name must not exceed 100 characters'),
   body('schoolId')
+    .optional()
     .isUUID()
-    .withMessage('Valid school ID is required'),
+    .withMessage('School ID must be a valid UUID'),
+  handleValidationErrors,
+];
+
+// Email verification / password reset validators
+export const validateVerifyEmail = [
+  query('token')
+    .notEmpty()
+    .withMessage('Verification token is required')
+    .isLength({ min: 64, max: 64 })
+    .withMessage('Invalid verification token'),
+  handleValidationErrors,
+];
+
+export const validateForgotPassword = [
+  body('email')
+    .isEmail()
+    .withMessage('Please provide a valid email address')
+    .normalizeEmail(),
+  handleValidationErrors,
+];
+
+export const validateResetPassword = [
+  body('token')
+    .notEmpty()
+    .withMessage('Reset token is required')
+    .isLength({ min: 64, max: 64 })
+    .withMessage('Invalid reset token'),
+  body('password')
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters long')
+    .matches(/[A-Z]/)
+    .withMessage('Password must contain at least one uppercase letter')
+    .matches(/[a-z]/)
+    .withMessage('Password must contain at least one lowercase letter')
+    .matches(/[0-9]/)
+    .withMessage('Password must contain at least one number'),
   handleValidationErrors,
 ];
 

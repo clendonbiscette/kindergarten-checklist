@@ -35,12 +35,13 @@ export const AuthProvider = ({ children }) => {
       return { success: false, message: response.message || 'Login failed' };
     } catch (error) {
       // Error thrown by API client (network error or HTTP error response)
-      // The error object from our API client is {success, message} for HTTP errors
+      // The error object from our API client is {success, message, code?} for HTTP errors
       // or {success, message: "Network error..."} for network issues
       const errorMessage = error?.message || (typeof error === 'string' ? error : 'Login failed. Please try again.');
       return {
         success: false,
         message: errorMessage,
+        code: error?.code,
       };
     }
   };
@@ -69,8 +70,8 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await authAPI.registerTeacher(teacherData);
       if (response.success) {
-        setUser(response.data.user);
-        return { success: true };
+        // Registration now requires email verification — do NOT auto-login
+        return { success: true, message: response.message };
       }
       return { success: false, message: response.message || 'Registration failed' };
     } catch (error) {

@@ -12,13 +12,25 @@ export const authAPI = {
   },
 
   registerTeacher: async (teacherData) => {
+    // Teacher registration now requires email verification — no auto-login
     const response = await apiClient.post('/auth/register/teacher', teacherData);
-    if (response.success && response.data.token) {
-      localStorage.setItem('authToken', response.data.token);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-    }
     return response;
+  },
+
+  forgotPassword: async (email) => {
+    return apiClient.post('/auth/forgot-password', { email });
+  },
+
+  resetPassword: async (token, password) => {
+    return apiClient.post('/auth/reset-password', { token, password });
+  },
+
+  verifyEmail: async (token) => {
+    return apiClient.get(`/auth/verify-email?token=${token}`);
+  },
+
+  resendVerification: async (email) => {
+    return apiClient.post('/auth/resend-verification', { email });
   },
 
   login: async (credentials) => {

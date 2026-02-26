@@ -42,8 +42,8 @@ const DesktopAssessmentApp = () => {
   const { user, logout } = useAuth();
   const toast = useToast();
 
-  // UI state
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // UI state — start closed on mobile (< lg breakpoint = 1024px)
+  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
   const [currentView, setCurrentView] = useState('data-entry');
   const [showHistoryFor, setShowHistoryFor] = useState(null);
   const [showClassModal, setShowClassModal] = useState(false);
@@ -1469,6 +1469,32 @@ const DesktopAssessmentApp = () => {
 
           {/* Scrollable Content Area */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+            {/* No active term warning */}
+            {selectedSchool && terms.length === 0 && currentView !== 'class-management' && (
+              <div className="mb-4 flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
+                <Calendar size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-amber-800 font-medium text-sm">No academic term configured</p>
+                  <p className="text-amber-700 text-xs mt-0.5">
+                    Your school administrator needs to create an academic term before assessments can be recorded.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* No classes assigned — teacher-specific guidance */}
+            {user?.role === 'TEACHER' && selectedSchool && classes.length === 0 && currentView === 'data-entry' && (
+              <div className="mb-4 flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+                <Users size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-blue-800 font-medium text-sm">No classes assigned yet</p>
+                  <p className="text-blue-700 text-xs mt-0.5">
+                    You haven't been assigned to a class. Please contact your school administrator to set this up.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Welcome guide for new teachers */}
             {showWelcome && currentView === 'data-entry' && (
               <TeacherWelcome

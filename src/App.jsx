@@ -6,6 +6,10 @@ import SuperuserDashboard from './components/SuperuserDashboard'
 import CountryAdminDashboard from './components/CountryAdminDashboard'
 import SchoolAdminOnboarding from './components/SchoolAdminOnboarding'
 import SchoolAdminDashboard from './components/SchoolAdminDashboard'
+import ForgotPassword from './components/ForgotPassword'
+import ResetPassword from './components/ResetPassword'
+import VerifyEmail from './components/VerifyEmail'
+import PendingAssignment from './components/PendingAssignment'
 import LoadingSpinner from './components/LoadingSpinner'
 import apiClient from './api/client'
 
@@ -40,6 +44,12 @@ function App() {
     }
   }, [isAuthenticated, user?.role])
 
+  // Handle public path-based routes before auth check
+  const path = window.location.pathname
+  if (path === '/forgot-password') return <ForgotPassword />
+  if (path === '/reset-password') return <ResetPassword />
+  if (path === '/verify-email') return <VerifyEmail />
+
   if (isLoading) {
     return <LoadingSpinner fullScreen message="Loading..." />
   }
@@ -73,6 +83,11 @@ function App() {
 
     // School Admin has a school, show dashboard
     return <SchoolAdminDashboard schoolData={schoolData} />
+  }
+
+  // TEACHER role: if not assigned to a school yet, show pending screen
+  if (user?.role === 'TEACHER' && !user?.schoolId) {
+    return <PendingAssignment />
   }
 
   // Default: Teacher view
