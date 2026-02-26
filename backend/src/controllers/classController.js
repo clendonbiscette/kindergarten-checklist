@@ -121,13 +121,26 @@ export const getClass = async (req, res, next) => {
 // Create class
 export const createClass = async (req, res, next) => {
   try {
-    const {
+    let {
       name,
       gradeLevel,
       schoolId,
       teacherId,
       academicYear,
     } = req.body;
+
+    // Teachers always own the class they create — auto-populate from their context
+    if (req.user.role === 'TEACHER') {
+      teacherId = req.user.userId;
+      // If schoolId not provided, derive it from the teacher's assignment
+      if (!schoolId) {
+        const assignment = await prisma.userAssignment.findFirst({
+          where: { userId: req.user.userId, schoolId: { not: null } },
+          select: { schoolId: true },
+        });
+        schoolId = assignment?.schoolId || null;
+      }
+    }
 
     // Validate required fields
     if (!name || !gradeLevel || !schoolId || !teacherId || !academicYear) {

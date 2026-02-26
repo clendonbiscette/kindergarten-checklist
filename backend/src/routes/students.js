@@ -21,16 +21,16 @@ router.get('/', verifySchoolAccess, getStudents);
 // Get single student - verify access to student's school
 router.get('/:id', validateUuidParam('id'), verifyStudentAccess, getStudent);
 
-// Create student (admins only) - verify school access
-router.post('/', authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'), validateCreateStudent, verifySchoolAccess, createStudent);
+// Create student (teachers and admins) - verify school access
+router.post('/', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'), validateCreateStudent, verifySchoolAccess, createStudent);
 
-// Assign student to class (teachers can only assign to their own classes)
+// Assign student to class
 router.patch('/:id/assign-class', validateUuidParam('id'), authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'), verifySchoolAccess, assignStudentToClass);
 
-// Update student (admins only) - verify student access
-router.put('/:id', authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'), validateUpdateStudent, verifyStudentAccess, updateStudent);
+// Update student (teachers and admins) - verify student access
+router.put('/:id', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'), validateUpdateStudent, verifyStudentAccess, updateStudent);
 
-// Delete student (admins only) - verify student access
-router.delete('/:id', validateUuidParam('id'), authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'), verifyStudentAccess, deleteStudent);
+// Delete student (teachers and admins) - verify student access
+router.delete('/:id', validateUuidParam('id'), authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'), verifyStudentAccess, deleteStudent);
 
 export default router;

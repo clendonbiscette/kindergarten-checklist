@@ -28,8 +28,8 @@ router.post('/', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), validate
 // Update class (teachers and admins, must have class access)
 router.put('/:id', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), validateUpdateClass, verifyClassAccess, updateClass);
 
-// Delete class (admins only, must have class access)
-router.delete('/:id', authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN'), verifyClassAccess, deleteClass);
+// Delete class (teachers can delete their own; admins can delete any within their scope)
+router.delete('/:id', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), verifyClassAccess, deleteClass);
 
 // Add student to class (teachers and admins, must have class access)
 router.post('/:id/students', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), verifyClassAccess, addStudentToClass);

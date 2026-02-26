@@ -122,7 +122,7 @@ export const getStudent = async (req, res, next) => {
 // Create student
 export const createStudent = async (req, res, next) => {
   try {
-    const {
+    let {
       firstName,
       lastName,
       dateOfBirth,
@@ -130,6 +130,15 @@ export const createStudent = async (req, res, next) => {
       schoolId,
       classId,
     } = req.body;
+
+    // Teachers auto-get their school — they don't need to pass schoolId manually
+    if (req.user.role === 'TEACHER' && !schoolId) {
+      const assignment = await prisma.userAssignment.findFirst({
+        where: { userId: req.user.userId, schoolId: { not: null } },
+        select: { schoolId: true },
+      });
+      schoolId = assignment?.schoolId || null;
+    }
 
     if (!firstName || !lastName || !studentIdNumber || !schoolId) {
       return res.status(400).json({

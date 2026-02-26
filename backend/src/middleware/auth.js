@@ -205,22 +205,9 @@ export const verifyStudentAccess = async (req, res, next) => {
       });
     }
 
-    // For teachers, verify they are assigned to the student's class
-    if (role === 'TEACHER') {
-      if (!student.classId) {
-        return res.status(403).json({
-          success: false,
-          message: 'This student is not assigned to any class.',
-        });
-      }
-
-      if (student.class?.teacherId !== userId) {
-        return res.status(403).json({
-          success: false,
-          message: 'You can only assess students in your assigned classes.',
-        });
-      }
-    }
+    // Teachers can manage any student at their school.
+    // Assessment-level access (verifyAssessmentAccess) handles the
+    // finer-grained "teacher can only record assessments for their own class" rule.
 
     next();
   } catch (error) {
