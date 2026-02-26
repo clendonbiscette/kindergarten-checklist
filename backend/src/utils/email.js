@@ -1,10 +1,17 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = process.env.EMAIL_FROM || 'OHPC Kindergarten <onboarding@resend.dev>';
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
+
+const FROM = `OHPC Kindergarten <${process.env.GMAIL_USER}>`;
 
 export async function sendVerificationEmail(to, { firstName, verifyUrl }) {
-  return resend.emails.send({
+  return transporter.sendMail({
     from: FROM,
     to,
     subject: 'Verify your email address — OHPC Kindergarten',
@@ -34,7 +41,7 @@ export async function sendVerificationEmail(to, { firstName, verifyUrl }) {
 }
 
 export async function sendPasswordResetEmail(to, { firstName, resetUrl }) {
-  return resend.emails.send({
+  return transporter.sendMail({
     from: FROM,
     to,
     subject: 'Reset your password — OHPC Kindergarten',
