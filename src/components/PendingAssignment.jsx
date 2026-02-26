@@ -7,15 +7,18 @@ const PendingAssignment = () => {
   const { data: countries = [] } = useCountries();
   const [selectedCountryId, setSelectedCountryId] = useState('');
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
+  const [schoolSearch, setSchoolSearch] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [error, setError] = useState('');
 
   const { data: allSchools = [] } = usePublicSchools({});
 
-  const filteredSchools = selectedCountryId
-    ? allSchools.filter(s => s.countryId === selectedCountryId)
-    : allSchools;
+  const filteredSchools = allSchools.filter(s => {
+    const matchesCountry = !selectedCountryId || s.countryId === selectedCountryId;
+    const matchesSearch = !schoolSearch || s.name.toLowerCase().includes(schoolSearch.toLowerCase());
+    return matchesCountry && matchesSearch;
+  });
 
   const handleAssign = async () => {
     if (!selectedSchoolId) return;
@@ -77,7 +80,7 @@ const PendingAssignment = () => {
 
             <select
               value={selectedCountryId}
-              onChange={e => { setSelectedCountryId(e.target.value); setSelectedSchoolId(''); }}
+              onChange={e => { setSelectedCountryId(e.target.value); setSelectedSchoolId(''); setSchoolSearch(''); }}
               className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:border-[#1E3A5F] focus:outline-none"
             >
               <option value="">All countries</option>
@@ -86,13 +89,22 @@ const PendingAssignment = () => {
               ))}
             </select>
 
+            <input
+              type="text"
+              value={schoolSearch}
+              onChange={e => { setSchoolSearch(e.target.value); setSelectedSchoolId(''); }}
+              placeholder="Type to search for your school..."
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:border-[#1E3A5F] focus:outline-none"
+            />
+
             <select
               value={selectedSchoolId}
               onChange={e => setSelectedSchoolId(e.target.value)}
               className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:border-[#1E3A5F] focus:outline-none"
+              size={filteredSchools.length > 0 && schoolSearch ? Math.min(filteredSchools.length + 1, 6) : undefined}
             >
               <option value="">
-                {filteredSchools.length === 0 ? 'No schools found' : 'Select your school...'}
+                {filteredSchools.length === 0 ? 'No schools match your search' : `${filteredSchools.length} school${filteredSchools.length !== 1 ? 's' : ''} found — select yours`}
               </option>
               {filteredSchools.map(s => (
                 <option key={s.id} value={s.id}>{s.name}</option>

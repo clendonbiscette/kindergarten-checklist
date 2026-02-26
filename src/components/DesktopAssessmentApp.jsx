@@ -195,6 +195,15 @@ const DesktopAssessmentApp = () => {
     }
   }, [user?.countryId, user?.schoolId]);
 
+  // After wizard: pre-select the class that was just created
+  useEffect(() => {
+    const wizardClassId = localStorage.getItem('ohpc_wizard_class_id');
+    if (wizardClassId) {
+      setSelectedClassId(wizardClassId);
+      localStorage.removeItem('ohpc_wizard_class_id');
+    }
+  }, []);
+
   // Smart defaults: Auto-select country if only one available (and not already set by user assignment)
   useEffect(() => {
     if (!selectedCountry && countries.length === 1) {
@@ -690,6 +699,23 @@ const DesktopAssessmentApp = () => {
               </option>
             ))}
           </select>
+        </div>
+
+        {/* Rating scale legend — always visible */}
+        <div className="flex flex-wrap items-center gap-3 text-xs bg-gray-50 rounded-lg px-4 py-2.5 border border-gray-200">
+          <span className="font-medium text-gray-600 shrink-0">Rating guide:</span>
+          <span className="flex items-center gap-1.5 text-gray-600">
+            <kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded font-bold text-green-700 font-mono">+</kbd>
+            Easily Meeting
+          </span>
+          <span className="flex items-center gap-1.5 text-gray-600">
+            <kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded font-bold text-blue-700 font-mono">=</kbd>
+            Meeting
+          </span>
+          <span className="flex items-center gap-1.5 text-gray-600">
+            <kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded font-bold text-red-600 font-mono">x</kbd>
+            Needs Practice
+          </span>
         </div>
 
         {/* Keyboard shortcut hint */}

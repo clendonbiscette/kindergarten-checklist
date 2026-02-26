@@ -279,7 +279,12 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
         </div>
       )}
       <button
-        onClick={onComplete}
+        onClick={() => {
+          if (createdClass?.id) {
+            localStorage.setItem('ohpc_wizard_class_id', createdClass.id);
+          }
+          onComplete();
+        }}
         className="mt-6 w-full py-3 bg-[#7CB342] text-white font-bold rounded-lg hover:bg-[#6aa030] transition-colors flex items-center justify-center gap-2"
       >
         Start Assessing <ChevronRight size={18} />

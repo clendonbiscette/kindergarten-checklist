@@ -98,9 +98,15 @@ const TeacherRegistration = ({ onBackToLogin }) => {
           <p className="text-gray-600 text-sm mb-2">
             We've sent a verification link to <strong>{formData.email}</strong>.
           </p>
-          <p className="text-gray-500 text-sm mb-6">
+          <p className="text-gray-500 text-sm mb-4">
             Click the link in the email to verify your account, then return here to log in.
           </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-6 text-left">
+            <p className="text-sm font-medium text-amber-800">Can&apos;t find the email?</p>
+            <p className="text-xs text-amber-700 mt-1">
+              Check your <strong>spam or junk folder</strong> — it sometimes ends up there. The sender will appear as &ldquo;OHPC Kindergarten&rdquo;.
+            </p>
+          </div>
           <button
             type="button"
             onClick={onBackToLogin}
@@ -116,11 +122,14 @@ const TeacherRegistration = ({ onBackToLogin }) => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1E3A5F] via-[#2D4A6F] to-[#1E3A5F] p-4">
       <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl">
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
             Teacher Registration
           </h1>
           <p className="text-gray-600">Join the OHPC Kindergarten Assessment System</p>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-6 text-sm text-blue-800">
+          This form is for <strong>classroom teachers only</strong>. If you are a school administrator or country official, please contact your administrator to have your account created for you.
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
