@@ -1,504 +1,564 @@
 // PDF Export Utilities
-// Generates PDF reports for students, classes, and assessments
+// OHPC Kindergarten Assessment Checklist — branded PDF reports
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 
-/**
- * Export student progress report to PDF
- * @param {Object} student - Student data
- * @param {Array} assessments - Student's assessments grouped by subject
- * @param {Object} options - Export options (schoolName, termName, teacherName)
- */
-export const exportStudentReportPDF = (student, assessments, options = {}) => {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
+/* ── Brand palette (RGB arrays for jsPDF) ─────────────────────────── */
+const C = {
+  navy:      [30,  58,  95],
+  green:     [124, 179, 66],
+  white:     [255, 255, 255],
+  gray50:    [248, 250, 252],
+  gray100:   [241, 245, 249],
+  gray200:   [226, 232, 240],
+  gray500:   [107, 114, 128],
+  gray700:   [55,  65,  81],
+  gray900:   [17,  24,  39],
+  strandBg:  [235, 241, 252],
+  strandText:[30,  58,  95],
+  greenBg:   [236, 253, 245], greenText:  [21,  128, 61],
+  blueBg:    [239, 246, 255], blueText:   [29,  78,  216],
+  amberBg:   [255, 251, 235], amberText:  [146, 64,  14],
+};
 
-  // Header
-  doc.setFontSize(20);
+const RATING_SYMBOLS = {
+  EASILY_MEETING: '+',
+  MEETING:        '=',
+  NEEDS_PRACTICE: 'x',
+};
+
+/* ── Shared drawing helpers ────────────────────────────────────────── */
+
+/** Navy banner at top of page. Returns Y position after the banner. */
+const drawBanner = (doc, subtitle, pageWidth) => {
+  doc.setFillColor(...C.navy);
+  doc.rect(0, 0, pageWidth, 24, 'F');
+  doc.setTextColor(...C.white);
   doc.setFont(undefined, 'bold');
-  doc.text('Student Progress Report', pageWidth / 2, 20, { align: 'center' });
-
-  // Student Info
   doc.setFontSize(12);
+  doc.text('OECS Kindergarten Progress Checklist', pageWidth / 2, 10, { align: 'center' });
   doc.setFont(undefined, 'normal');
-  const infoY = 35;
-  doc.text(`Student Name: ${student.firstName} ${student.lastName}`, 14, infoY);
-  doc.text(`Student ID: ${student.studentIdNumber || 'N/A'}`, 14, infoY + 7);
+  doc.setFontSize(8.5);
+  doc.text(subtitle, pageWidth / 2, 18, { align: 'center' });
+  doc.setTextColor(...C.gray900);
+  return 30;
+};
 
-  if (student.dateOfBirth) {
-    doc.text(`Date of Birth: ${format(new Date(student.dateOfBirth), 'MMM dd, yyyy')}`, 14, infoY + 14);
-  }
-
-  if (options.schoolName) {
-    doc.text(`School: ${options.schoolName}`, 14, infoY + 21);
-  }
-
-  if (options.termName) {
-    doc.text(`Term: ${options.termName}`, 14, infoY + 28);
-  }
-
-  doc.text(`Report Generated: ${format(new Date(), 'MMM dd, yyyy')}`, 14, infoY + 35);
-
-  // Add line separator
-  doc.setLineWidth(0.5);
-  doc.line(14, infoY + 42, pageWidth - 14, infoY + 42);
-
-  let currentY = infoY + 50;
-
-  // Summary Statistics
-  const totalAssessments = assessments.reduce((sum, subject) => sum + subject.assessments.length, 0);
-  const ratingCounts = {
-    EASILY_MEETING: 0,
-    MEETING: 0,
-    NEEDS_PRACTICE: 0
-  };
-
-  assessments.forEach(subject => {
-    subject.assessments.forEach(assessment => {
-      ratingCounts[assessment.rating]++;
-    });
-  });
-
-  doc.setFontSize(14);
-  doc.setFont(undefined, 'bold');
-  doc.text('Summary', 14, currentY);
-  currentY += 10;
-
-  doc.setFontSize(11);
-  doc.setFont(undefined, 'normal');
-  doc.text(`Total Assessments: ${totalAssessments}`, 14, currentY);
-  doc.text(`Easily Meeting Expectations: ${ratingCounts.EASILY_MEETING}`, 14, currentY + 7);
-  doc.text(`Meeting Expectations: ${ratingCounts.MEETING}`, 14, currentY + 14);
-  doc.text(`Needs Practice: ${ratingCounts.NEEDS_PRACTICE}`, 14, currentY + 21);
-
-  currentY += 35;
-
-  // Assessments by Subject
-  doc.setFontSize(14);
-  doc.setFont(undefined, 'bold');
-  doc.text('Assessment Details by Subject', 14, currentY);
-  currentY += 10;
-
-  assessments.forEach((subjectData, index) => {
-    // Check if we need a new page
-    if (currentY > 250) {
-      doc.addPage();
-      currentY = 20;
+/** Two-column label/value info block. Returns Y after block. */
+const drawInfoBlock = (doc, leftItems, rightItems, startY, pageWidth, margin) => {
+  let y = startY;
+  const midX = pageWidth / 2 + 5;
+  doc.setFontSize(8.5);
+  const rows = Math.max(leftItems.length, rightItems.length);
+  for (let i = 0; i < rows; i++) {
+    const l = leftItems[i];
+    const r = rightItems[i];
+    if (l) {
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(...C.gray500);
+      doc.text(l.label + ':', margin, y);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(...C.gray900);
+      doc.text(String(l.value ?? 'N/A'), margin + 24, y);
     }
+    if (r) {
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(...C.gray500);
+      doc.text(r.label + ':', midX, y);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(...C.gray900);
+      doc.text(String(r.value ?? 'N/A'), midX + 24, y);
+    }
+    y += 6;
+  }
+  doc.setTextColor(...C.gray900);
+  return y + 3;
+};
 
-    doc.setFontSize(12);
+/** Row of colored summary stat boxes. Returns Y after boxes. */
+const drawSummaryBoxes = (doc, boxes, startY, pageWidth, margin) => {
+  const gap  = 3;
+  const boxW = (pageWidth - margin * 2 - gap * (boxes.length - 1)) / boxes.length;
+  const boxH = 18;
+  let x = margin;
+  boxes.forEach(({ label, value, textColor, bgColor }) => {
+    doc.setFillColor(...bgColor);
+    doc.roundedRect(x, startY, boxW, boxH, 2, 2, 'F');
+    doc.setDrawColor(...textColor);
+    doc.setLineWidth(0.25);
+    doc.roundedRect(x, startY, boxW, boxH, 2, 2, 'S');
+    doc.setTextColor(...textColor);
     doc.setFont(undefined, 'bold');
-    doc.text(subjectData.subject, 14, currentY);
-    currentY += 7;
-
-    // Create table for assessments
-    const tableData = subjectData.assessments.map(assessment => [
-      assessment.code || '',
-      assessment.description?.substring(0, 60) + (assessment.description?.length > 60 ? '...' : ''),
-      getRatingSymbol(assessment.rating),
-      assessment.assessmentDate ? format(new Date(assessment.assessmentDate), 'MMM dd, yyyy') : 'N/A'
-    ]);
-
-    const tableResult = autoTable(doc, {
-      startY: currentY,
-      head: [['Code', 'Learning Outcome', 'Rating', 'Date']],
-      body: tableData,
-      theme: 'striped',
-      headStyles: { fillColor: [66, 139, 202], fontSize: 10 },
-      bodyStyles: { fontSize: 9 },
-      columnStyles: {
-        0: { cellWidth: 20 },
-        1: { cellWidth: 90 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 35 }
-      },
-      margin: { left: 14 },
-    });
-
-    currentY = (doc.lastAutoTable?.finalY || tableResult?.finalY || currentY) + 10;
-  });
-
-  // Footer on last page
-  const totalPages = doc.internal.pages.length - 1;
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setFontSize(9);
+    doc.setFontSize(13);
+    doc.text(String(value), x + boxW / 2, startY + 10.5, { align: 'center' });
     doc.setFont(undefined, 'normal');
-    doc.text(
-      `Page ${i} of ${totalPages}`,
-      pageWidth / 2,
-      doc.internal.pageSize.getHeight() - 10,
-      { align: 'center' }
-    );
-
-    if (options.teacherName) {
-      doc.text(
-        `Teacher: ${options.teacherName}`,
-        14,
-        doc.internal.pageSize.getHeight() - 10
-      );
-    }
-  }
-
-  // Save the PDF
-  const filename = `${student.firstName}_${student.lastName}_Progress_Report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-  doc.save(filename);
-};
-
-/**
- * Export class summary report to PDF
- * @param {Object} classData - Class information
- * @param {Array} students - Students in class
- * @param {Object} statistics - Class statistics
- * @param {Object} options - Export options
- */
-export const exportClassSummaryPDF = (classData, students, statistics, options = {}) => {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-
-  // Header
-  doc.setFontSize(20);
-  doc.setFont(undefined, 'bold');
-  doc.text('Class Summary Report', pageWidth / 2, 20, { align: 'center' });
-
-  // Class Info
-  doc.setFontSize(12);
-  doc.setFont(undefined, 'normal');
-  const infoY = 35;
-  doc.text(`Class: ${classData.name}`, 14, infoY);
-  doc.text(`Grade Level: ${classData.gradeLevel}`, 14, infoY + 7);
-  doc.text(`Academic Year: ${classData.academicYear}`, 14, infoY + 14);
-
-  if (options.schoolName) {
-    doc.text(`School: ${options.schoolName}`, 14, infoY + 21);
-  }
-
-  if (options.termName) {
-    doc.text(`Term: ${options.termName}`, 14, infoY + 28);
-  }
-
-  doc.text(`Report Generated: ${format(new Date(), 'MMM dd, yyyy')}`, 14, infoY + 35);
-  doc.text(`Total Students: ${students.length}`, 14, infoY + 42);
-
-  // Line separator
-  doc.setLineWidth(0.5);
-  doc.line(14, infoY + 50, pageWidth - 14, infoY + 50);
-
-  let currentY = infoY + 60;
-
-  // Class Statistics
-  doc.setFontSize(14);
-  doc.setFont(undefined, 'bold');
-  doc.text('Class Statistics', 14, currentY);
-  currentY += 10;
-
-  doc.setFontSize(11);
-  doc.setFont(undefined, 'normal');
-  doc.text(`Total Assessments Completed: ${statistics.assessmentCount || 0}`, 14, currentY);
-  doc.text(`Assessment Completion Rate: ${statistics.completionRate?.percentage || 0}%`, 14, currentY + 7);
-  doc.text(`Curriculum Coverage: ${statistics.coverage?.percentage || 0}%`, 14, currentY + 14);
-  doc.text(`Overall Performance: ${statistics.performancePercentage || 0}%`, 14, currentY + 21);
-
-  currentY += 35;
-
-  // Rating Distribution
-  doc.setFontSize(12);
-  doc.setFont(undefined, 'bold');
-  doc.text('Rating Distribution', 14, currentY);
-  currentY += 7;
-
-  doc.setFontSize(11);
-  doc.setFont(undefined, 'normal');
-  const dist = statistics.ratingDistribution || {};
-  doc.text(`Easily Meeting: ${dist.EASILY_MEETING || 0}`, 14, currentY);
-  doc.text(`Meeting: ${dist.MEETING || 0}`, 14, currentY + 7);
-  doc.text(`Needs Practice: ${dist.NEEDS_PRACTICE || 0}`, 14, currentY + 14);
-
-  currentY += 30;
-
-  // Students needing attention
-  if (statistics.studentsNeedingAttention?.length > 0) {
-    doc.setFontSize(12);
-    doc.setFont(undefined, 'bold');
-    doc.text('Students Needing Attention', 14, currentY);
-    currentY += 7;
-
-    const tableData = statistics.studentsNeedingAttention.map(student => [
-      `${student.firstName} ${student.lastName}`,
-      student.assessmentCount.toString(),
-      `${student.needsPracticePercentage}%`
-    ]);
-
-    const attentionTable = autoTable(doc, {
-      startY: currentY,
-      head: [['Student Name', 'Assessments', 'Needs Practice %']],
-      body: tableData,
-      theme: 'striped',
-      headStyles: { fillColor: [220, 53, 69], fontSize: 10 },
-      bodyStyles: { fontSize: 9 },
-      margin: { left: 14 }
-    });
-
-    currentY = (doc.lastAutoTable?.finalY || attentionTable?.finalY || currentY) + 15;
-  }
-
-  // Student roster with assessment counts
-  if (currentY > 200) {
-    doc.addPage();
-    currentY = 20;
-  }
-
-  doc.setFontSize(12);
-  doc.setFont(undefined, 'bold');
-  doc.text('Student Roster', 14, currentY);
-  currentY += 7;
-
-  const rosterData = students.map((student, index) => [
-    (index + 1).toString(),
-    `${student.firstName} ${student.lastName}`,
-    student.studentIdNumber || 'N/A',
-    student.assessmentCount?.toString() || '0'
-  ]);
-
-  autoTable(doc, {
-    startY: currentY,
-    head: [['#', 'Student Name', 'Student ID', 'Assessments']],
-    body: rosterData,
-    theme: 'striped',
-    headStyles: { fillColor: [66, 139, 202], fontSize: 10 },
-    bodyStyles: { fontSize: 9 },
-    margin: { left: 14 }
+    doc.setFontSize(6.5);
+    doc.text(label, x + boxW / 2, startY + 16, { align: 'center' });
+    x += boxW + gap;
   });
+  doc.setTextColor(...C.gray900);
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.5);
+  return startY + boxH + 4;
+};
 
-  // Footer
-  const totalPages = doc.internal.pages.length - 1;
-  for (let i = 1; i <= totalPages; i++) {
+/** Add branded footer to every page of the document. */
+const addFooters = (doc, pageWidth, teacherName) => {
+  const total   = doc.internal.getNumberOfPages();
+  const genDate = format(new Date(), 'MMM dd, yyyy');
+  const pageH   = doc.internal.pageSize.getHeight();
+  for (let i = 1; i <= total; i++) {
     doc.setPage(i);
-    doc.setFontSize(9);
-    doc.text(
-      `Page ${i} of ${totalPages}`,
-      pageWidth / 2,
-      doc.internal.pageSize.getHeight() - 10,
-      { align: 'center' }
-    );
-
-    if (options.teacherName) {
-      doc.text(
-        `Teacher: ${options.teacherName}`,
-        14,
-        doc.internal.pageSize.getHeight() - 10
-      );
-    }
+    const y = pageH - 7;
+    doc.setFontSize(7);
+    doc.setFont(undefined, 'normal');
+    doc.setTextColor(...C.gray500);
+    doc.setDrawColor(...C.gray200);
+    doc.setLineWidth(0.25);
+    doc.line(14, y - 3, pageWidth - 14, y - 3);
+    if (teacherName) doc.text(`Prepared by: ${teacherName}`, 14, y);
+    doc.text(`Generated: ${genDate}`, pageWidth / 2, y, { align: 'center' });
+    doc.text(`Page ${i} of ${total}`, pageWidth - 14, y, { align: 'right' });
   }
-
-  // Save
-  const filename = `${classData.name}_Summary_Report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-  doc.save(filename);
+  doc.setTextColor(...C.gray900);
 };
 
+/* ── Student-Subject Report (primary parent-facing report) ─────────── */
 /**
- * Helper function to get rating symbol
- */
-const getRatingSymbol = (rating) => {
-  switch (rating) {
-    case 'EASILY_MEETING':
-      return '+ (Easily Meeting)';
-    case 'MEETING':
-      return '= (Meeting)';
-    case 'NEEDS_PRACTICE':
-      return 'x (Needs Practice)';
-    default:
-      return rating;
-  }
-};
-
-/**
- * Export student-subject detailed report to PDF (matching template format)
- * Shows all assessments for a student in a specific subject with date columns
- * @param {Object} reportData - Data from useStudentSubjectReport hook
- * @param {Object} options - Export options
+ * Export a detailed subject progress report for a single student.
+ * Shows all outcomes grouped by strand with date columns and colour-coded ratings.
+ * @param {Object} reportData - { student, subject, term, assessmentDates, strands, summary }
+ * @param {Object} options    - { teacherName, schoolName }
  */
 export const exportStudentSubjectReportPDF = (reportData, options = {}) => {
-  const { student, subject, term, assessmentDates, strands, summary } = reportData;
+  const { student, subject, term, assessmentDates = [], strands = [], summary = {} } = reportData;
+  const nDates = assessmentDates.length;
 
   const doc = new jsPDF({
-    orientation: assessmentDates.length > 3 ? 'landscape' : 'portrait',
+    orientation: nDates > 3 ? 'landscape' : 'portrait',
     unit: 'mm',
     format: 'a4',
   });
 
   const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 14;
+  const margin    = 12;
 
-  // Header
-  doc.setFontSize(18);
-  doc.setFont(undefined, 'bold');
-  doc.text(`${subject.name} Progress Report`, pageWidth / 2, 15, { align: 'center' });
+  /* Banner */
+  let curY = drawBanner(doc, `${subject?.name || ''} Progress Report`, pageWidth);
 
-  // Student Info Section
-  doc.setFontSize(11);
-  doc.setFont(undefined, 'normal');
-  let infoY = 25;
-
-  doc.text(`Learner: ${student.firstName} ${student.lastName}`, margin, infoY);
-  doc.text(`Student ID: ${student.studentIdNumber || 'N/A'}`, pageWidth / 2, infoY);
-  infoY += 6;
-
-  doc.text(`Class: ${student.class || 'N/A'}`, margin, infoY);
-  doc.text(`School: ${student.school || 'N/A'}`, pageWidth / 2, infoY);
-  infoY += 6;
-
-  if (term) {
-    doc.text(`Term: ${term.name} (${term.schoolYear})`, margin, infoY);
-  }
-  doc.text(`Generated: ${format(new Date(), 'MMM dd, yyyy')}`, pageWidth / 2, infoY);
-  infoY += 8;
-
-  // Summary Stats
-  doc.setFontSize(10);
-  doc.setFont(undefined, 'bold');
-  doc.text('Summary:', margin, infoY);
-  doc.setFont(undefined, 'normal');
-  doc.text(
-    `Outcomes: ${summary.assessedOutcomes}/${summary.totalOutcomes} (${summary.completionRate}%) | ` +
-    `Performance: ${summary.performanceScore}% | ` +
-    `Ratings: +${summary.ratingDistribution.EASILY_MEETING} =${summary.ratingDistribution.MEETING} x${summary.ratingDistribution.NEEDS_PRACTICE}`,
-    margin + 20,
-    infoY
+  /* Info block */
+  const sy = term?.schoolYear ? ` (${term.schoolYear})` : '';
+  curY = drawInfoBlock(
+    doc,
+    [
+      { label: 'Learner', value: `${student?.firstName || ''} ${student?.lastName || ''}`.trim() },
+      { label: 'Class',   value: student?.class  || 'N/A' },
+      { label: 'School',  value: student?.school || options.schoolName || 'N/A' },
+    ],
+    [
+      { label: 'Teacher', value: options.teacherName || 'N/A' },
+      { label: 'Term',    value: term ? `${term.name}${sy}` : 'N/A' },
+      { label: 'Date',    value: format(new Date(), 'MMM dd, yyyy') },
+    ],
+    curY, pageWidth, margin,
   );
-  infoY += 4;
 
-  // Rating Legend
-  doc.setFontSize(9);
-  doc.text('+ = Easily Meeting    = = Meeting    x = Needs Practice', margin, infoY);
-  infoY += 6;
+  /* Summary boxes */
+  const dist = summary.ratingDistribution || {};
+  curY = drawSummaryBoxes(doc, [
+    { label: '+ Easily Meeting',  value: dist.EASILY_MEETING || 0, textColor: C.greenText, bgColor: C.greenBg },
+    { label: '= Meeting',          value: dist.MEETING        || 0, textColor: C.blueText,  bgColor: C.blueBg  },
+    { label: 'x Needs Practice',  value: dist.NEEDS_PRACTICE || 0, textColor: C.amberText, bgColor: C.amberBg },
+    {
+      label: 'Outcomes Assessed',
+      value: `${summary.assessedOutcomes || 0}/${summary.totalOutcomes || 0}`,
+      textColor: C.navy,
+      bgColor: C.gray100,
+    },
+  ], curY, pageWidth, margin);
 
-  // Line separator
-  doc.setLineWidth(0.5);
-  doc.line(margin, infoY, pageWidth - margin, infoY);
-  infoY += 5;
+  /* Legend */
+  doc.setFontSize(7).setFont(undefined, 'italic').setTextColor(...C.gray500);
+  doc.text('+  Easily Meeting Expectations    =  Meeting Expectations    x  Needs Practice', margin, curY);
+  curY += 5;
+  doc.setTextColor(...C.gray900);
 
-  // Build table data
-  const tableHead = [
-    ['SCO No.', 'Outcome', ...assessmentDates.flatMap(date => [
-      format(new Date(date), 'MMM d'),
-      'Comment'
-    ])]
-  ];
+  /* Build table */
+  let head, body, columnStyles, didParseCell;
+  const usableW = pageWidth - margin * 2;
 
-  const tableBody = [];
-
-  strands.forEach((strand) => {
-    // Add strand header row
-    const strandRow = [{
-      content: `Strand: ${strand.name}`,
-      colSpan: 2 + assessmentDates.length * 2,
-      styles: { fillColor: [219, 234, 254], fontStyle: 'bold', textColor: [30, 64, 175] }
-    }];
-    tableBody.push(strandRow);
-
-    // Add outcome rows
-    strand.outcomes.forEach((outcome) => {
-      const row = [
-        outcome.code,
-        outcome.description.length > 60
-          ? outcome.description.substring(0, 60) + '...'
-          : outcome.description
-      ];
-
-      assessmentDates.forEach((date) => {
-        const assessment = outcome.assessmentsByDate[date];
-        if (assessment) {
-          row.push(getRatingSymbolShort(assessment.rating));
-          row.push(assessment.comment ?
-            (assessment.comment.length > 20 ? assessment.comment.substring(0, 20) + '...' : assessment.comment)
-            : '');
-        } else {
-          row.push('-');
-          row.push('');
-        }
-      });
-
-      tableBody.push(row);
-    });
-  });
-
-  // If no assessment dates, add placeholder columns
-  if (assessmentDates.length === 0) {
-    tableHead[0].push('Rating', 'Comment');
+  if (nDates === 0) {
+    /* No assessments recorded yet — simplified outcome list */
+    head = [['SCO No.', 'Learning Outcome', 'Status']];
+    body = [];
     strands.forEach((strand) => {
-      strand.outcomes.forEach((outcome, idx) => {
-        if (idx === 0) {
-          // Find the strand row we already added
-        }
-        const existingRow = tableBody.find(row =>
-          row.length === 2 && row[0] === outcome.code
-        );
-        if (existingRow) {
-          existingRow.push('-', '-');
-        }
+      body.push([{
+        content: strand.name,
+        colSpan: 3,
+        styles: { fillColor: C.strandBg, textColor: C.strandText, fontStyle: 'bold', fontSize: 8 },
+      }]);
+      strand.outcomes.forEach((o) => {
+        body.push([
+          o.code,
+          o.description,
+          { content: 'Not Assessed', styles: { textColor: C.gray500, fontStyle: 'italic' } },
+        ]);
       });
     });
+    columnStyles = {
+      0: { cellWidth: 16, halign: 'center' },
+      1: { cellWidth: usableW - 16 - 36 },
+      2: { cellWidth: 36 },
+    };
+    didParseCell = undefined;
+  } else {
+    /* Full date-column grid */
+    head = [['SCO No.', 'Learning Outcome', ...assessmentDates.flatMap((d) => [
+      format(new Date(d), 'MMM d'),
+      'Comment',
+    ])]];
+
+    const ratingColIndices = new Set(assessmentDates.map((_, i) => 2 + i * 2));
+    body = [];
+
+    strands.forEach((strand) => {
+      body.push([{
+        content: strand.name,
+        colSpan: 2 + nDates * 2,
+        styles: {
+          fillColor: C.strandBg,
+          textColor: C.strandText,
+          fontStyle: 'bold',
+          fontSize: 8,
+          cellPadding: { top: 3, bottom: 3, left: 5, right: 5 },
+        },
+      }]);
+
+      strand.outcomes.forEach((outcome) => {
+        const row = [outcome.code, outcome.description]; // full description, no truncation
+        assessmentDates.forEach((date) => {
+          const a = outcome.assessmentsByDate?.[date];
+          if (a) {
+            row.push(RATING_SYMBOLS[a.rating] || '—');
+            const comment = a.comment
+              ? (a.comment.length > 80 ? a.comment.substring(0, 80) + '…' : a.comment)
+              : '';
+            row.push(comment);
+          } else {
+            row.push('—');
+            row.push('');
+          }
+        });
+        body.push(row);
+      });
+    });
+
+    /* Column widths */
+    const codeW    = 15;
+    const ratingW  = 14;
+    const commentW = Math.max(20, Math.min(38, (usableW - codeW - nDates * (ratingW + 22)) / Math.max(1, nDates)));
+    const outcomeW = Math.max(40, usableW - codeW - nDates * (ratingW + commentW));
+
+    columnStyles = {
+      0: { cellWidth: codeW, halign: 'center' },
+      1: { cellWidth: outcomeW },
+    };
+    assessmentDates.forEach((_, i) => {
+      columnStyles[2 + i * 2]     = { cellWidth: ratingW, halign: 'center' };
+      columnStyles[2 + i * 2 + 1] = { cellWidth: commentW };
+    });
+
+    /* Colour-code rating cells in the parse hook */
+    didParseCell = (data) => {
+      if (data.section !== 'body') return;
+      if (!ratingColIndices.has(data.column.index)) return;
+      const raw = data.cell.raw;
+      if (raw === '+') {
+        data.cell.styles.fillColor = C.greenBg;
+        data.cell.styles.textColor = C.greenText;
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fontSize  = 10;
+      } else if (raw === '=') {
+        data.cell.styles.fillColor = C.blueBg;
+        data.cell.styles.textColor = C.blueText;
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fontSize  = 10;
+      } else if (raw === 'x') {
+        data.cell.styles.fillColor = C.amberBg;
+        data.cell.styles.textColor = C.amberText;
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fontSize  = 10;
+      }
+    };
   }
 
-  // Create the table
   autoTable(doc, {
-    startY: infoY,
-    head: tableHead,
-    body: tableBody,
-    theme: 'striped',
+    startY: curY,
+    head,
+    body,
+    theme: 'grid',
     headStyles: {
-      fillColor: [66, 139, 202],
-      fontSize: 8,
-      cellPadding: 2
+      fillColor: C.navy,
+      textColor: C.white,
+      fontStyle: 'bold',
+      fontSize:  7.5,
+      cellPadding: 3,
     },
     bodyStyles: {
-      fontSize: 8,
-      cellPadding: 2
+      fontSize:    7.5,
+      cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
+      textColor:   C.gray700,
+      lineColor:   C.gray200,
+      lineWidth:   0.2,
     },
-    columnStyles: {
-      0: { cellWidth: 15 },
-      1: { cellWidth: assessmentDates.length > 3 ? 50 : 70 },
-    },
-    margin: { left: margin, right: margin },
-    didDrawPage: (data) => {
-      // Footer on each page
-      doc.setFontSize(8);
-      doc.text(
-        `Page ${doc.internal.getNumberOfPages()}`,
-        pageWidth / 2,
-        pageHeight - 10,
-        { align: 'center' }
-      );
-    },
+    alternateRowStyles: { fillColor: C.gray50 },
+    columnStyles,
+    margin: { left: margin, right: margin, bottom: 14 },
+    ...(didParseCell && { didParseCell }),
   });
 
-  // Save the PDF
-  const filename = `${student.firstName}_${student.lastName}_${subject.name}_Report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+  addFooters(doc, pageWidth, options.teacherName);
+
+  const fname = [
+    (student?.firstName || 'Student'),
+    (student?.lastName  || ''),
+    (subject?.name      || 'Report'),
+    format(new Date(), 'yyyy-MM-dd'),
+  ].join('_').replace(/\s+/g, '_') + '.pdf';
+
+  doc.save(fname);
+};
+
+/* ── Student Summary Report (all subjects) ─────────────────────────── */
+/**
+ * Export an all-subjects progress summary for a single student.
+ * @param {Object} student     - Student data
+ * @param {Array}  assessments - [{ subject, assessments: [{code, description, rating, assessmentDate, comment}] }]
+ * @param {Object} options     - { schoolName, termName, teacherName }
+ */
+export const exportStudentReportPDF = (student, assessments, options = {}) => {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin    = 14;
+
+  /* Banner */
+  let curY = drawBanner(doc, 'Student Progress Report', pageWidth);
+
+  /* Info block */
+  const dob = student.dateOfBirth ? format(new Date(student.dateOfBirth), 'MMM dd, yyyy') : null;
+  curY = drawInfoBlock(
+    doc,
+    [
+      { label: 'Learner', value: `${student.firstName} ${student.lastName}` },
+      { label: 'ID',      value: student.studentIdNumber || 'N/A' },
+      ...(dob ? [{ label: 'DOB', value: dob }] : []),
+    ],
+    [
+      { label: 'School', value: options.schoolName  || 'N/A' },
+      { label: 'Term',   value: options.termName    || 'N/A' },
+      { label: 'Teacher', value: options.teacherName || 'N/A' },
+    ],
+    curY, pageWidth, margin,
+  );
+
+  /* Summary boxes */
+  const ratingCounts = { EASILY_MEETING: 0, MEETING: 0, NEEDS_PRACTICE: 0 };
+  let totalAssessments = 0;
+  assessments.forEach((subject) => {
+    subject.assessments.forEach((a) => {
+      ratingCounts[a.rating] = (ratingCounts[a.rating] || 0) + 1;
+      totalAssessments++;
+    });
+  });
+
+  curY = drawSummaryBoxes(doc, [
+    { label: '+ Easily Meeting', value: ratingCounts.EASILY_MEETING, textColor: C.greenText, bgColor: C.greenBg },
+    { label: '= Meeting',         value: ratingCounts.MEETING,        textColor: C.blueText,  bgColor: C.blueBg  },
+    { label: 'x Needs Practice', value: ratingCounts.NEEDS_PRACTICE, textColor: C.amberText, bgColor: C.amberBg },
+    { label: 'Total Assessed',   value: totalAssessments,            textColor: C.navy,      bgColor: C.gray100 },
+  ], curY, pageWidth, margin);
+
+  /* One table per subject */
+  assessments.forEach((subjectData) => {
+    if (curY > doc.internal.pageSize.getHeight() - 50) {
+      doc.addPage();
+      curY = 15;
+    }
+
+    /* Subject heading */
+    doc.setFontSize(10).setFont(undefined, 'bold').setTextColor(...C.navy);
+    doc.text(subjectData.subject, margin, curY + 4);
+    curY += 8;
+    doc.setTextColor(...C.gray900);
+
+    const tableData = subjectData.assessments.map((a) => [
+      a.code || '',
+      a.description || '',                   // full description
+      getRatingLabel(a.rating),
+      a.assessmentDate ? format(new Date(a.assessmentDate), 'MMM dd, yyyy') : 'N/A',
+      a.comment
+        ? (a.comment.length > 80 ? a.comment.substring(0, 80) + '…' : a.comment)
+        : '',
+    ]);
+
+    autoTable(doc, {
+      startY: curY,
+      head: [['Code', 'Learning Outcome', 'Rating', 'Date', 'Comment']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 8, cellPadding: 2.5 },
+      bodyStyles: { fontSize: 7.5, cellPadding: { top: 2, bottom: 2, left: 3, right: 3 }, textColor: C.gray700, lineColor: C.gray200, lineWidth: 0.2 },
+      alternateRowStyles: { fillColor: C.gray50 },
+      columnStyles: {
+        0: { cellWidth: 14, halign: 'center' },
+        1: { cellWidth: 72 },
+        2: { cellWidth: 32 },
+        3: { cellWidth: 26 },
+        4: { cellWidth: 36 },
+      },
+      margin: { left: margin, right: margin, bottom: 14 },
+      didParseCell: (data) => {
+        if (data.section !== 'body' || data.column.index !== 2) return;
+        const raw = data.cell.raw;
+        if (raw?.startsWith('+')) { data.cell.styles.fillColor = C.greenBg; data.cell.styles.textColor = C.greenText; data.cell.styles.fontStyle = 'bold'; }
+        else if (raw?.startsWith('=')) { data.cell.styles.fillColor = C.blueBg;  data.cell.styles.textColor = C.blueText;  data.cell.styles.fontStyle = 'bold'; }
+        else if (raw?.startsWith('x')) { data.cell.styles.fillColor = C.amberBg; data.cell.styles.textColor = C.amberText; data.cell.styles.fontStyle = 'bold'; }
+      },
+    });
+
+    curY = (doc.lastAutoTable?.finalY || curY) + 8;
+  });
+
+  addFooters(doc, pageWidth, options.teacherName);
+
+  const filename = `${student.firstName}_${student.lastName}_Progress_${format(new Date(), 'yyyy-MM-dd')}.pdf`.replace(/\s+/g, '_');
   doc.save(filename);
 };
 
+/* ── Class Summary Report ─────────────────────────────────────────── */
 /**
- * Helper to get short rating symbol for PDF
+ * Export a class-level summary report.
+ * @param {Object} classData   - Class information
+ * @param {Array}  students    - Students in the class
+ * @param {Object} statistics  - Class statistics
+ * @param {Object} options     - { schoolName, termName, teacherName }
  */
-const getRatingSymbolShort = (rating) => {
+export const exportClassSummaryPDF = (classData, students, statistics, options = {}) => {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin    = 14;
+
+  /* Banner */
+  let curY = drawBanner(doc, 'Class Summary Report', pageWidth);
+
+  /* Info block */
+  curY = drawInfoBlock(
+    doc,
+    [
+      { label: 'Class',      value: classData.name },
+      { label: 'Grade',      value: classData.gradeLevel    || 'N/A' },
+      { label: 'Acad. Year', value: classData.academicYear  || 'N/A' },
+    ],
+    [
+      { label: 'School',   value: options.schoolName  || 'N/A' },
+      { label: 'Term',     value: options.termName    || 'N/A' },
+      { label: 'Teacher',  value: options.teacherName || 'N/A' },
+    ],
+    curY, pageWidth, margin,
+  );
+
+  /* Summary boxes */
+  const dist = statistics.ratingDistribution || {};
+  curY = drawSummaryBoxes(doc, [
+    { label: '+ Easily Meeting', value: dist.EASILY_MEETING || 0, textColor: C.greenText, bgColor: C.greenBg },
+    { label: '= Meeting',         value: dist.MEETING        || 0, textColor: C.blueText,  bgColor: C.blueBg  },
+    { label: 'x Needs Practice', value: dist.NEEDS_PRACTICE || 0, textColor: C.amberText, bgColor: C.amberBg },
+    { label: 'Students',         value: students.length,          textColor: C.navy,      bgColor: C.gray100 },
+  ], curY, pageWidth, margin);
+
+  /* Quick stats row */
+  doc.setFontSize(8).setFont(undefined, 'normal').setTextColor(...C.gray500);
+  doc.text(
+    `Completion Rate: ${statistics.completionRate?.percentage || 0}%   |   ` +
+    `Overall Performance: ${statistics.performancePercentage || 0}%   |   ` +
+    `Total Assessments: ${statistics.assessmentCount || 0}`,
+    margin, curY,
+  );
+  curY += 7;
+  doc.setTextColor(...C.gray900);
+
+  /* Students needing attention */
+  if (statistics.studentsNeedingAttention?.length > 0) {
+    doc.setFontSize(10).setFont(undefined, 'bold').setTextColor(...C.navy);
+    doc.text('Students Needing Attention', margin, curY);
+    curY += 4;
+    doc.setTextColor(...C.gray900);
+
+    autoTable(doc, {
+      startY: curY,
+      head: [['Student Name', 'Assessments', 'Needs Practice %']],
+      body: statistics.studentsNeedingAttention.map((s) => [
+        `${s.firstName} ${s.lastName}`,
+        String(s.assessmentCount),
+        `${s.needsPracticePercentage}%`,
+      ]),
+      theme: 'grid',
+      headStyles: { fillColor: [185, 28, 28], textColor: C.white, fontStyle: 'bold', fontSize: 8, cellPadding: 2.5 },
+      bodyStyles: { fontSize: 8, cellPadding: { top: 2, bottom: 2, left: 3, right: 3 }, textColor: C.gray700, lineColor: C.gray200, lineWidth: 0.2 },
+      alternateRowStyles: { fillColor: C.gray50 },
+      columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 35 }, 2: { cellWidth: 40 } },
+      margin: { left: margin, right: margin, bottom: 14 },
+    });
+    curY = (doc.lastAutoTable?.finalY || curY) + 8;
+  }
+
+  /* Student roster */
+  if (curY > doc.internal.pageSize.getHeight() - 60) {
+    doc.addPage();
+    curY = 15;
+  }
+  doc.setFontSize(10).setFont(undefined, 'bold').setTextColor(...C.navy);
+  doc.text('Student Roster', margin, curY);
+  curY += 4;
+  doc.setTextColor(...C.gray900);
+
+  autoTable(doc, {
+    startY: curY,
+    head: [['#', 'Student Name', 'Student ID', 'Assessments Recorded']],
+    body: students.map((s, i) => [
+      String(i + 1),
+      `${s.firstName} ${s.lastName}`,
+      s.studentIdNumber || 'N/A',
+      String(s.assessmentCount || 0),
+    ]),
+    theme: 'grid',
+    headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 8, cellPadding: 2.5 },
+    bodyStyles: { fontSize: 8, cellPadding: { top: 2, bottom: 2, left: 3, right: 3 }, textColor: C.gray700, lineColor: C.gray200, lineWidth: 0.2 },
+    alternateRowStyles: { fillColor: C.gray50 },
+    columnStyles: { 0: { cellWidth: 12, halign: 'center' }, 1: { cellWidth: 80 }, 2: { cellWidth: 40 }, 3: { cellWidth: 40 } },
+    margin: { left: margin, right: margin, bottom: 14 },
+  });
+
+  addFooters(doc, pageWidth, options.teacherName);
+
+  const filename = `${classData.name}_Summary_${format(new Date(), 'yyyy-MM-dd')}.pdf`.replace(/\s+/g, '_');
+  doc.save(filename);
+};
+
+/* ── Rating display helpers ────────────────────────────────────────── */
+const getRatingLabel = (rating) => {
   switch (rating) {
-    case 'EASILY_MEETING':
-      return '+';
-    case 'MEETING':
-      return '=';
-    case 'NEEDS_PRACTICE':
-      return 'x';
-    default:
-      return '-';
+    case 'EASILY_MEETING': return '+ Easily Meeting';
+    case 'MEETING':        return '= Meeting';
+    case 'NEEDS_PRACTICE': return 'x Needs Practice';
+    default:               return rating || '—';
   }
 };
 
 export default {
   exportStudentReportPDF,
   exportClassSummaryPDF,
-  exportStudentSubjectReportPDF
+  exportStudentSubjectReportPDF,
 };
