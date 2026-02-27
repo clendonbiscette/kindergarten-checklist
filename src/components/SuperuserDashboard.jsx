@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Users, School, BarChart3, LogOut, Search, Plus,
   Edit2, Key, UserX, ChevronDown, ChevronUp, X,
-  Shield, UserCheck, Building, Globe, RefreshCw, BookOpen, Upload
+  Shield, UserCheck, Building, Globe, RefreshCw, BookOpen, Upload, Calendar
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -23,6 +23,7 @@ import ChangePasswordModal from './ChangePasswordModal';
 import AppFooter from './AppFooter';
 import BulkImportStudents from './BulkImportStudents';
 import { useStudents } from '../hooks/useStudents';
+import { useTerms, useCreateTerm, useUpdateTerm, useDeleteTerm } from '../hooks/useTerms';
 
 const SuperuserDashboard = () => {
   const { user, logout } = useAuth();
@@ -43,6 +44,9 @@ const SuperuserDashboard = () => {
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [selectedSchoolForStudents, setSelectedSchoolForStudents] = useState('');
+  const [selectedSchoolForTerms, setSelectedSchoolForTerms] = useState('');
+  const [showTermModal, setShowTermModal] = useState(false);
+  const [editingTerm, setEditingTerm] = useState(null);
   const [showChangePassword, setShowChangePassword] = useState(false);
 
   // Fetch data
@@ -60,6 +64,7 @@ const SuperuserDashboard = () => {
   const { data: students = [], isLoading: loadingStudents, refetch: refetchStudents } = useStudents(
     selectedSchoolForStudents ? { schoolId: selectedSchoolForStudents } : {}
   );
+  const { data: terms = [], isLoading: loadingTerms } = useTerms(selectedSchoolForTerms || null);
 
   // Mutations
   const createUser = useCreateUser();
@@ -68,6 +73,7 @@ const SuperuserDashboard = () => {
   const deactivateUser = useDeactivateUser();
   const assignToSchool = useAssignUserToSchool();
   const createSchool = useCreateSchool();
+  const deleteTerm = useDeleteTerm();
 
   const users = usersData?.users || [];
 
@@ -425,6 +431,104 @@ const SuperuserDashboard = () => {
     );
   };
 
+  const handleDeleteTerm = async (term) => {
+    if (!window.confirm(`Delete "${term.name}"? This cannot be undone.\n\nNote: terms with assessments cannot be deleted.`)) return;
+    try {
+      await deleteTerm.mutateAsync(term.id);
+      toast.success('Term deleted');
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete term');
+    }
+  };
+
+  const renderTerms = () => {
+    return (
+      <div className="space-y-4">
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row gap-3 bg-white p-4 rounded-lg shadow-sm">
+          <select
+            value={selectedSchoolForTerms}
+            onChange={(e) => { setSelectedSchoolForTerms(e.target.value); setEditingTerm(null); }}
+            className="flex-1 px-3 py-2 border border-gray-200 rounded-md text-sm min-w-[250px]"
+          >
+            <option value="">Select a school to manage its terms...</option>
+            {schools.map((s) => (
+              <option key={s.id} value={s.id}>{s.name} ({s.country?.name})</option>
+            ))}
+          </select>
+          {selectedSchoolForTerms && (
+            <button
+              onClick={() => { setEditingTerm(null); setShowTermModal(true); }}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+            >
+              <Plus size={16} />
+              Add Term
+            </button>
+          )}
+        </div>
+
+        {/* Content */}
+        {!selectedSchoolForTerms ? (
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+            <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
+            <h3 className="font-medium text-gray-700 mb-2">Select a School</h3>
+            <p className="text-sm text-gray-500">Choose a school from the dropdown above to view and manage its academic terms.</p>
+          </div>
+        ) : loadingTerms ? (
+          <div className="text-center py-8 text-gray-500">Loading terms...</div>
+        ) : terms.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+            <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
+            <h3 className="font-medium text-gray-700 mb-2">No Terms Yet</h3>
+            <p className="text-sm text-gray-500 mb-4">This school has no academic terms. Create the first one to get started.</p>
+            <button
+              onClick={() => { setEditingTerm(null); setShowTermModal(true); }}
+              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+            >
+              Create First Term
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {terms.map((term) => (
+              <div key={term.id} className="bg-white rounded-lg shadow-sm p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <h4 className="font-semibold text-gray-800">{term.name}</h4>
+                    <p className="text-sm text-gray-500">{term.schoolYear}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => { setEditingTerm(term); setShowTermModal(true); }}
+                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                      title="Edit term"
+                    >
+                      <Edit2 size={15} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTerm(term)}
+                      disabled={deleteTerm.isPending}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-40"
+                      title="Delete term"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 space-y-0.5 border-t pt-2 mt-2">
+                  <div>{new Date(term.startDate).toLocaleDateString()} — {new Date(term.endDate).toLocaleDateString()}</div>
+                  {term._count?.assessments > 0 && (
+                    <div className="text-amber-600 font-medium">{term._count.assessments} assessment{term._count.assessments !== 1 ? 's' : ''}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderSchools = () => {
     return (
       <div className="space-y-4">
@@ -601,6 +705,7 @@ const SuperuserDashboard = () => {
     { id: 'users', label: 'Users', icon: Users },
     { id: 'schools', label: 'Schools', icon: School },
     { id: 'students', label: 'Students', icon: BookOpen },
+    { id: 'terms', label: 'Terms', icon: Calendar },
   ];
 
   return (
@@ -669,6 +774,7 @@ const SuperuserDashboard = () => {
         {currentView === 'users' && renderUsers()}
         {currentView === 'schools' && renderSchools()}
         {currentView === 'students' && renderStudents()}
+        {currentView === 'terms' && renderTerms()}
       </div>
 
       {/* Create User Modal */}
@@ -728,6 +834,16 @@ const SuperuserDashboard = () => {
           onClose={() => setShowCreateSchoolModal(false)}
           onSubmit={handleCreateSchool}
           isLoading={createSchool.isPending}
+        />
+      )}
+
+      {/* Term Modal */}
+      {showTermModal && (
+        <SuperuserTermModal
+          term={editingTerm}
+          schoolId={selectedSchoolForTerms}
+          onClose={() => { setShowTermModal(false); setEditingTerm(null); }}
+          onSuccess={() => { setShowTermModal(false); setEditingTerm(null); }}
         />
       )}
 
@@ -1254,6 +1370,125 @@ const CreateSchoolModal = ({ countries, onClose, onSubmit, isLoading }) => {
               className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
             >
               {isLoading ? 'Creating...' : 'Create School'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const SuperuserTermModal = ({ term, schoolId, onClose, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    schoolYear: new Date().getFullYear() + '-' + (new Date().getFullYear() + 1),
+    startDate: '',
+    endDate: '',
+  });
+  const [error, setError] = useState('');
+  const createTerm = useCreateTerm();
+  const updateTerm = useUpdateTerm();
+
+  useEffect(() => {
+    if (term) {
+      setFormData({
+        name: term.name || '',
+        schoolYear: term.schoolYear || '',
+        startDate: term.startDate ? new Date(term.startDate).toISOString().split('T')[0] : '',
+        endDate: term.endDate ? new Date(term.endDate).toISOString().split('T')[0] : '',
+      });
+    } else {
+      setFormData({
+        name: '',
+        schoolYear: new Date().getFullYear() + '-' + (new Date().getFullYear() + 1),
+        startDate: '',
+        endDate: '',
+      });
+    }
+  }, [term]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!formData.name || !formData.schoolYear || !formData.startDate || !formData.endDate) {
+      setError('Please fill in all required fields');
+      return;
+    }
+    try {
+      if (term) {
+        await updateTerm.mutateAsync({ id: term.id, data: formData });
+      } else {
+        await createTerm.mutateAsync({ ...formData, schoolId });
+      }
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to save term');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b">
+          <h2 className="text-xl font-bold text-gray-800">{term ? 'Edit Term' : 'Create New Term'}</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700"><X size={24} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Term Name *</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="e.g., Term 1, Fall Semester"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">School Year *</label>
+            <input
+              type="text"
+              value={formData.schoolYear}
+              onChange={(e) => setFormData({ ...formData, schoolYear: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="e.g., 2025-26"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date *</label>
+              <input
+                type="date"
+                value={formData.startDate}
+                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">End Date *</label>
+              <input
+                type="date"
+                value={formData.endDate}
+                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+          </div>
+          {error && <div className="bg-red-50 text-red-700 px-4 py-3 rounded text-sm">{error}</div>}
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-200 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={createTerm.isPending || updateTerm.isPending}
+              className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
+            >
+              {createTerm.isPending || updateTerm.isPending ? 'Saving...' : term ? 'Save Changes' : 'Create Term'}
             </button>
           </div>
         </form>
