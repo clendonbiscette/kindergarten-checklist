@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
 import { useUpdateStudent } from '../hooks/useStudents';
 import { useClasses } from '../hooks/useClasses';
+import Drawer from './Drawer';
 
 const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
   const [formData, setFormData] = useState({
@@ -73,28 +73,11 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
     }
   };
 
-  if (!isOpen || !student) return null;
+  if (!student && !isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="student-edit-title"
-    >
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 id="student-edit-title" className="text-xl font-bold text-gray-800">Edit Student</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-            aria-label="Close"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Drawer isOpen={isOpen} onClose={onClose} title="Edit Student" width="md">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
@@ -107,7 +90,7 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
                 value={formData.firstName}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
                 placeholder="John"
               />
             </div>
@@ -123,7 +106,7 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
                 value={formData.lastName}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
                 placeholder="Doe"
               />
             </div>
@@ -140,7 +123,7 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
               value={formData.studentIdNumber}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
               placeholder="e.g., 2024-001"
             />
           </div>
@@ -155,7 +138,7 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
               type="date"
               value={formData.dateOfBirth}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
             />
           </div>
 
@@ -168,7 +151,7 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
               name="classId"
               value={formData.classId}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] bg-white"
             >
               <option value="">No Class (Unassigned)</option>
               {classes.map((classItem) => (
@@ -198,7 +181,7 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
               role="switch"
               aria-checked={formData.isActive}
               onClick={() => setFormData(prev => ({ ...prev, isActive: !prev.isActive }))}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] focus:ring-offset-2 ${
                 formData.isActive ? 'bg-indigo-600' : 'bg-gray-300'
               }`}
             >
@@ -233,14 +216,13 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
             <button
               type="submit"
               disabled={updateStudent.isPending}
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {updateStudent.isPending ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Drawer>
   );
 };
 

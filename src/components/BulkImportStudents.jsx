@@ -294,7 +294,7 @@ const BulkImportStudents = ({ isOpen, onClose, onSuccess, schoolId, classId }) =
               <button
                 onClick={handleImport}
                 disabled={!file || importing}
-                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {importing ? 'Importing...' : 'Import Students'}
               </button>

@@ -87,7 +87,7 @@ const StudentSelectionModal = ({ isOpen, onClose, students, currentStudents, onA
               placeholder="Search by name or student ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
             />
           </div>
 
@@ -98,7 +98,7 @@ const StudentSelectionModal = ({ isOpen, onClose, students, currentStudents, onA
                   type="checkbox"
                   checked={selectedStudentIds.length === filteredStudents.length && filteredStudents.length > 0}
                   onChange={handleSelectAll}
-                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-[#1E3A5F]"
                 />
                 Select All ({filteredStudents.length})
               </label>
@@ -141,7 +141,7 @@ const StudentSelectionModal = ({ isOpen, onClose, students, currentStudents, onA
                     type="checkbox"
                     checked={selectedStudentIds.includes(student.id)}
                     onChange={() => handleToggleStudent(student.id)}
-                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-[#1E3A5F]"
                   />
                   <div className="flex-1">
                     <div className="font-medium text-gray-800">
@@ -176,7 +176,7 @@ const StudentSelectionModal = ({ isOpen, onClose, students, currentStudents, onA
           <button
             onClick={handleAddStudents}
             disabled={selectedStudentIds.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <UserPlus size={18} />
             Add {selectedStudentIds.length > 0 ? `${selectedStudentIds.length} ` : ''}Student{selectedStudentIds.length !== 1 ? 's' : ''}

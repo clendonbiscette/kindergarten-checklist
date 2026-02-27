@@ -3,6 +3,7 @@ import { X, UserPlus, Users, UserCheck } from 'lucide-react';
 import { useUpdateClass } from '../hooks/useClasses';
 import { useStudents, useUpdateStudent } from '../hooks/useStudents';
 import StudentSelectionModal from './StudentSelectionModal';
+import Drawer from './Drawer';
 
 const ClassEditModal = ({ isOpen, onClose, onSuccess, classData, teachers = [] }) => {
   const [formData, setFormData] = useState({
@@ -101,27 +102,11 @@ const ClassEditModal = ({ isOpen, onClose, onSuccess, classData, teachers = [] }
     }
   };
 
-  if (!isOpen || !classData) return null;
+  if (!classData && !isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="class-edit-title"
-    >
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 id="class-edit-title" className="text-xl font-bold text-gray-800">Edit Class</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Drawer isOpen={isOpen} onClose={onClose} title="Edit Class" width="lg">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
               Class Name *
@@ -133,7 +118,7 @@ const ClassEditModal = ({ isOpen, onClose, onSuccess, classData, teachers = [] }
               value={formData.name}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
               placeholder="e.g., Morning Kindergarten, K1-A"
             />
           </div>
@@ -148,7 +133,7 @@ const ClassEditModal = ({ isOpen, onClose, onSuccess, classData, teachers = [] }
               value={formData.gradeLevel}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
             >
               <option value="">Select grade level...</option>
               <option value="Pre-K">Pre-K</option>
@@ -169,7 +154,7 @@ const ClassEditModal = ({ isOpen, onClose, onSuccess, classData, teachers = [] }
               value={formData.academicYear}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
               placeholder="e.g., 2024-2025"
             />
           </div>
@@ -187,7 +172,7 @@ const ClassEditModal = ({ isOpen, onClose, onSuccess, classData, teachers = [] }
               name="teacherId"
               value={formData.teacherId}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] bg-white"
             >
               <option value="">No Teacher Assigned</option>
               {teachers.map((teacher) => (
@@ -213,7 +198,7 @@ const ClassEditModal = ({ isOpen, onClose, onSuccess, classData, teachers = [] }
               <button
                 type="button"
                 onClick={() => setShowStudentSelector(true)}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
               >
                 <UserPlus size={16} />
                 Add Students
@@ -278,15 +263,14 @@ const ClassEditModal = ({ isOpen, onClose, onSuccess, classData, teachers = [] }
             <button
               type="submit"
               disabled={updateClass.isPending}
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {updateClass.isPending ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>
-      </div>
 
-      {/* Student Selection Modal */}
+      {/* Student Selection Modal — renders above the Drawer */}
       <StudentSelectionModal
         isOpen={showStudentSelector}
         onClose={() => setShowStudentSelector(false)}
@@ -294,7 +278,7 @@ const ClassEditModal = ({ isOpen, onClose, onSuccess, classData, teachers = [] }
         currentStudents={classStudents}
         onAddStudents={handleAddStudents}
       />
-    </div>
+    </Drawer>
   );
 };
 

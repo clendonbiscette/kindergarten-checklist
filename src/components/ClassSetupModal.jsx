@@ -89,7 +89,7 @@ const ClassSetupModal = ({ isOpen, onClose, onSuccess, schoolId }) => {
               value={formData.name}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
               placeholder="e.g., Morning Kindergarten, K1-A"
             />
           </div>
@@ -104,7 +104,7 @@ const ClassSetupModal = ({ isOpen, onClose, onSuccess, schoolId }) => {
               value={formData.gradeLevel}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
             >
               <option value="">Select grade level...</option>
               <option value="Pre-K">Pre-K</option>
@@ -125,7 +125,7 @@ const ClassSetupModal = ({ isOpen, onClose, onSuccess, schoolId }) => {
               value={formData.academicYear}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
               placeholder="e.g., 2024-2025"
             />
           </div>
@@ -147,7 +147,7 @@ const ClassSetupModal = ({ isOpen, onClose, onSuccess, schoolId }) => {
             <button
               type="submit"
               disabled={createClass.isPending}
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {createClass.isPending ? 'Creating...' : 'Create Class'}
             </button>

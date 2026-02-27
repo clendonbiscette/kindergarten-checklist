@@ -3,7 +3,8 @@ import {
   Download, Search, X, LogOut, Menu, ChevronRight,
   Home, FileText, BarChart3, User, School, Calendar,
   BookOpen, Users, TrendingUp, CheckCircle2, PlusCircle,
-  UserPlus, GraduationCap, Edit2, Trash2, Upload, Key
+  UserPlus, GraduationCap, Edit2, Trash2, Upload, Key,
+  Moon, Sun
 } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
@@ -20,7 +21,7 @@ import {
   useDeleteAssessment
 } from '../hooks/useAssessments';
 import { useClasses, useDeleteClass } from '../hooks/useClasses';
-import { useDeleteStudent, useAssignStudentToClass } from '../hooks/useStudents';
+import { useDeleteStudent, useAssignStudentToClass, useUpdateStudent } from '../hooks/useStudents';
 import { useCreateTerm } from '../hooks/useTerms';
 import ClassSetupModal from './ClassSetupModal';
 import StudentEntryModal from './StudentEntryModal';
@@ -31,10 +32,10 @@ import AssignStudentModal from './AssignStudentModal';
 import BulkAssignStudents from './BulkAssignStudents';
 import CreateStudentModal from './CreateStudentModal';
 import AssessmentEditModal from './AssessmentEditModal';
-import ConfirmModal from './ConfirmModal';
 import TeacherWelcome from './TeacherWelcome';
 import ChangePasswordModal from './ChangePasswordModal';
 import AppFooter from './AppFooter';
+import CommandPalette from './CommandPalette';
 import { saveSession, getSession } from '../utils/sessionStorage';
 import { offlineQueue } from '../utils/offlineQueue';
 import { exportStudentReportPDF } from '../utils/pdfExport';
@@ -137,6 +138,7 @@ const DesktopAssessmentApp = () => {
 
   // Offline queue state
   const [queueCount, setQueueCount] = useState(offlineQueue.count());
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Track which outcome IDs are currently being saved to prevent double-submit
   const [savingOutcomeIds, setSavingOutcomeIds] = useState(new Set());
@@ -147,9 +149,25 @@ const DesktopAssessmentApp = () => {
   // Session expiry warning (fires 5 min before JWT expires)
   const [sessionWarning, setSessionWarning] = useState(false);
 
-  // Confirm modal state
-  const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: null, data: null });
-  const [isDeleting, setIsDeleting] = useState(false);
+  // Undo system — pending deletes with 5-second cancel window
+  const [undoItems, setUndoItems] = useState([]);
+
+  // Inline student name editing (class management view)
+  const [editingStudentInlineId, setEditingStudentInlineId] = useState(null);
+  const [editingStudentFirst, setEditingStudentFirst] = useState('');
+  const [editingStudentLast, setEditingStudentLast] = useState('');
+
+  // Keyboard shortcut discovery — show hint after 5th mouse click on a rating button
+  const [showKeyboardHint, setShowKeyboardHint] = useState(false);
+
+  // Command palette (Cmd+K / Ctrl+K)
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+
+  // Dark mode — persisted in localStorage, applied to <html> element
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('ohpc_dark_mode') === 'true'
+      || (localStorage.getItem('ohpc_dark_mode') === null && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+  });
 
   // Welcome guide state - check localStorage to see if user has dismissed it
   const [showWelcome, setShowWelcome] = useState(() => {
@@ -257,8 +275,15 @@ const DesktopAssessmentApp = () => {
       flushQueue();
     }
 
-    window.addEventListener('online', flushQueue);
-    return () => window.removeEventListener('online', flushQueue);
+    const handleOnline = () => { setIsOnline(true); flushQueue(); };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // Fetch data with React Query
@@ -309,6 +334,7 @@ const DesktopAssessmentApp = () => {
   const deleteStudent = useDeleteStudent();
   const assignStudentMutation = useAssignStudentToClass();
   const createTerm = useCreateTerm();
+  const updateStudentInline = useUpdateStudent();
 
   // Track which student is being assigned (for loading state)
   const [assigningStudentId, setAssigningStudentId] = useState(null);
@@ -409,6 +435,14 @@ const DesktopAssessmentApp = () => {
     document.title = `${titles[currentView] || 'App'} — OHPC Kindergarten`;
     return () => { document.title = 'OHPC Kindergarten Progress Checklist'; };
   }, [currentView]);
+
+  // Dark mode — apply/remove class on <html>
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) root.classList.add('dark');
+    else root.classList.remove('dark');
+    localStorage.setItem('ohpc_dark_mode', darkMode);
+  }, [darkMode]);
 
   // Helper functions
   const getRatingValue = (symbol) => {
@@ -539,6 +573,18 @@ const DesktopAssessmentApp = () => {
     }
   };
 
+  // Global Cmd+K / Ctrl+K listener for command palette
+  useEffect(() => {
+    const handleGlobalKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, []);
+
   // Keyboard shortcuts for assessment ratings
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -578,39 +624,33 @@ const DesktopAssessmentApp = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentView, focusedOutcomeId, tempAssessments, filteredOutcomes]);
 
-  // Open confirm modal for different delete operations
-  const openDeleteConfirm = (type, data) => {
-    setConfirmModal({ isOpen: true, type, data });
-  };
-
-  const closeDeleteConfirm = () => {
-    setConfirmModal({ isOpen: false, type: null, data: null });
-  };
-
-  const handleConfirmDelete = async () => {
-    const { type, data } = confirmModal;
-    setIsDeleting(true);
-
-    try {
-      if (type === 'assessment') {
-        await deleteAssessment.mutateAsync(data.id);
-        toast.success('Assessment deleted');
-      } else if (type === 'class') {
-        await deleteClass.mutateAsync(data.id);
-        if (selectedClassId === data.id) {
-          setSelectedClassId('');
+  // Schedule a delete with a 5-second undo window
+  const scheduleDelete = (type, data, label) => {
+    const itemId = `del_${Date.now()}_${Math.random()}`;
+    const timeoutId = setTimeout(async () => {
+      setUndoItems(prev => prev.filter(i => i.id !== itemId));
+      try {
+        if (type === 'assessment') {
+          await deleteAssessment.mutateAsync(data.id);
+        } else if (type === 'class') {
+          await deleteClass.mutateAsync(data.id);
+          if (selectedClassId === data.id) setSelectedClassId('');
+        } else if (type === 'student') {
+          await deleteStudent.mutateAsync(data.id);
         }
-        toast.success(`Class "${data.name}" deleted successfully`);
-      } else if (type === 'student') {
-        await deleteStudent.mutateAsync(data.id);
-        toast.success(`Student "${data.name}" removed successfully`);
+      } catch (err) {
+        toast.error(`Failed to delete: ` + (err.message || 'Unknown error'));
       }
-      closeDeleteConfirm();
-    } catch (error) {
-      toast.error(`Failed to delete ${type}: ` + (error.message || 'Unknown error'));
-    } finally {
-      setIsDeleting(false);
-    }
+    }, 5000);
+    setUndoItems(prev => [...prev, { id: itemId, type, data, label, timeoutId }]);
+  };
+
+  const handleUndoDelete = (itemId) => {
+    setUndoItems(prev => {
+      const item = prev.find(i => i.id === itemId);
+      if (item) clearTimeout(item.timeoutId);
+      return prev.filter(i => i.id !== itemId);
+    });
   };
 
   const handleDeleteAssessment = (assessment) => {
@@ -618,15 +658,15 @@ const DesktopAssessmentApp = () => {
     const date = typeof assessment === 'object' && assessment.assessmentDate
       ? new Date(assessment.assessmentDate).toLocaleDateString()
       : null;
-    openDeleteConfirm('assessment', { id, date });
+    scheduleDelete('assessment', { id }, `Assessment${date ? ` from ${date}` : ''}`);
   };
 
   const handleDeleteClass = (classId, className) => {
-    openDeleteConfirm('class', { id: classId, name: className });
+    scheduleDelete('class', { id: classId }, `Class "${className}"`);
   };
 
   const handleDeleteStudent = (studentId, studentName) => {
-    openDeleteConfirm('student', { id: studentId, name: studentName });
+    scheduleDelete('student', { id: studentId }, `Student "${studentName}"`);
   };
 
   const handleEditClass = (classData) => {
@@ -649,6 +689,27 @@ const DesktopAssessmentApp = () => {
       toast.error(err.message || 'Failed to assign student');
     } finally {
       setAssigningStudentId(null);
+    }
+  };
+
+  const handleSaveInlineStudent = async (student) => {
+    if (!editingStudentFirst.trim() || !editingStudentLast.trim()) return;
+    try {
+      await updateStudentInline.mutateAsync({
+        id: student.id,
+        data: {
+          firstName: editingStudentFirst.trim(),
+          lastName: editingStudentLast.trim(),
+          dateOfBirth: student.dateOfBirth || null,
+          studentIdNumber: student.studentIdNumber,
+          classId: student.classId || null,
+          isActive: student.isActive !== false,
+        },
+      });
+      setEditingStudentInlineId(null);
+      toast.success('Student name updated');
+    } catch (err) {
+      toast.error(err.message || 'Failed to update student');
     }
   };
 
@@ -917,9 +978,32 @@ const DesktopAssessmentApp = () => {
           </span>
         </div>
 
-        {/* Keyboard shortcut hint */}
+        {/* One-time keyboard shortcut discovery banner (shown after 5 mouse clicks) */}
+        {showKeyboardHint && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2.5 flex items-center justify-between text-sm" role="note">
+            <div className="flex items-center gap-2 text-indigo-800 flex-wrap">
+              <span className="font-medium">Pro tip:</span>
+              <span>Click a card then use</span>
+              <kbd className="px-1.5 py-0.5 bg-white border rounded text-xs font-mono">+</kbd>
+              <kbd className="px-1.5 py-0.5 bg-white border rounded text-xs font-mono">=</kbd>
+              <kbd className="px-1.5 py-0.5 bg-white border rounded text-xs font-mono">x</kbd>
+              <span>to rate without clicking, then</span>
+              <kbd className="px-1.5 py-0.5 bg-white border rounded text-xs font-mono">Enter</kbd>
+              <span>to save.</span>
+            </div>
+            <button
+              onClick={() => setShowKeyboardHint(false)}
+              className="ml-3 text-indigo-400 hover:text-indigo-700 flex-shrink-0"
+              aria-label="Dismiss tip"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
+        {/* Keyboard shortcut hint — shown while an outcome card is focused */}
         {focusedOutcomeId && (
-          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2 text-sm text-indigo-800 flex items-center gap-4">
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2 text-sm text-indigo-800 flex items-center gap-4 flex-wrap">
             <span className="font-medium">Keyboard shortcuts:</span>
             <span><kbd className="px-1.5 py-0.5 bg-white border rounded text-xs font-mono">1</kbd> or <kbd className="px-1.5 py-0.5 bg-white border rounded text-xs font-mono">+</kbd> = Easily Meeting</span>
             <span><kbd className="px-1.5 py-0.5 bg-white border rounded text-xs font-mono">2</kbd> or <kbd className="px-1.5 py-0.5 bg-white border rounded text-xs font-mono">=</kbd> = Meeting</span>
@@ -985,8 +1069,10 @@ const DesktopAssessmentApp = () => {
                     )}
                   </div>
 
-                  {/* Assessment controls */}
-                  <div className="flex-shrink-0 space-y-2 lg:w-64">
+                  {/* Assessment controls — sticky at bottom on tablet when card is focused */}
+                  <div className={`flex-shrink-0 space-y-2 lg:w-64 ${
+                    isFocused ? 'lg:static sticky bottom-0 bg-white pt-2 pb-1 -mx-3 px-3 border-t border-gray-100 lg:border-t-0 lg:bg-transparent lg:pt-0 lg:pb-0 lg:mx-0 lg:px-0 z-10' : ''
+                  }`}>
                     <div className="flex gap-2">
                       {[
                         { symbol: '+', key: '1', rating: 'EASILY_MEETING', label: 'Easily Meeting' },
@@ -995,10 +1081,22 @@ const DesktopAssessmentApp = () => {
                       ].map(({ symbol, key, rating, label }) => (
                         <button
                           key={symbol}
-                          onClick={(e) => { e.stopPropagation(); setTempAssessments({...tempAssessments, [outcome.id]: rating}); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTempAssessments({...tempAssessments, [outcome.id]: rating});
+                            // Keyboard shortcut discovery — show hint after 5th mouse click
+                            if (!localStorage.getItem('ohpc_keyboard_hint_shown')) {
+                              const count = parseInt(localStorage.getItem('ohpc_rating_clicks') || '0') + 1;
+                              localStorage.setItem('ohpc_rating_clicks', count);
+                              if (count >= 5) {
+                                localStorage.setItem('ohpc_keyboard_hint_shown', 'true');
+                                setShowKeyboardHint(true);
+                              }
+                            }
+                          }}
                           aria-label={`${label}${currentRating === rating ? ' (selected)' : ''}`}
                           aria-pressed={currentRating === rating}
-                          className={`flex-1 h-10 rounded font-bold transition-all relative ${
+                          className={`flex-1 h-11 lg:h-10 rounded font-bold text-lg lg:text-base transition-all relative ${
                             currentRating === rating
                               ? symbol === '+' ? 'bg-green-500 text-white ring-2 ring-green-600'
                                 : symbol === '=' ? 'bg-blue-500 text-white ring-2 ring-blue-600'
@@ -1322,51 +1420,60 @@ const DesktopAssessmentApp = () => {
 
     return (
       <div className="space-y-4">
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={() => setShowClassModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <PlusCircle size={18} />
-            Create New Class
-          </button>
-          <button
-            onClick={() => setShowCreateStudentModal(true)}
-            disabled={!selectedClassId}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            title={!selectedClassId ? 'Select a class first' : `Add a new student to ${selectedClassObj?.name}`}
-          >
-            <UserPlus size={18} />
-            {selectedClassId ? 'Add Student' : 'Select a Class First'}
-          </button>
-          <button
-            onClick={() => setShowBulkImport(true)}
-            disabled={!selectedClassId}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            title={!selectedClassId ? 'Select a class first to bulk import' : `Bulk import students from CSV into ${selectedClassObj?.name}`}
-          >
-            <Upload size={18} />
-            {selectedClassId ? 'Bulk Import CSV' : 'Select a Class First'}
-          </button>
-          <button
-            onClick={() => setShowAssignStudentModal(true)}
-            disabled={!selectedClassId}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            title={!selectedClassId ? 'Select a class first' : `Move an existing student into ${selectedClassObj?.name}`}
-          >
-            <Users size={18} />
-            {selectedClassId ? 'Move Student Here' : 'Select a Class First'}
-          </button>
-          <button
-            onClick={() => setShowBulkAssign(true)}
-            disabled={!selectedClassId}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            title={!selectedClassId ? 'Select a class first to bulk assign' : `Bulk assign students to ${selectedClassObj?.name}`}
-          >
-            <Users size={18} />
-            {selectedClassId ? 'Bulk Assign Students' : 'Select a Class First'}
-          </button>
+        {/* Action Toolbar */}
+        <div className="space-y-2">
+          {/* Primary actions — always visible */}
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => setShowClassModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
+            >
+              <PlusCircle size={18} />
+              Create New Class
+            </button>
+            <button
+              onClick={() => setShowCreateStudentModal(true)}
+              disabled={!selectedClassId}
+              className="flex items-center gap-2 px-4 py-2 bg-[#558B2F] text-white rounded-md hover:bg-[#43731F] focus:outline-none focus:ring-2 focus:ring-[#558B2F] disabled:opacity-40 disabled:cursor-not-allowed"
+              title={!selectedClassId ? 'Select a class above to add a student' : `Add a new student to ${selectedClassObj?.name}`}
+            >
+              <UserPlus size={18} />
+              Add Student
+            </button>
+          </div>
+
+          {/* Secondary actions — only shown when a class is selected */}
+          {selectedClassObj && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2">
+              <span className="text-xs text-gray-500 mr-1">
+                More for <span className="font-semibold text-indigo-700">{selectedClassObj.name}</span>:
+              </span>
+              <button
+                onClick={() => setShowBulkImport(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
+                title={`Bulk import students from CSV into ${selectedClassObj.name}`}
+              >
+                <Upload size={15} />
+                Bulk Import CSV
+              </button>
+              <button
+                onClick={() => setShowAssignStudentModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
+                title={`Move an existing student into ${selectedClassObj.name}`}
+              >
+                <Users size={15} />
+                Move Student Here
+              </button>
+              <button
+                onClick={() => setShowBulkAssign(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
+                title={`Bulk assign students to ${selectedClassObj.name}`}
+              >
+                <Users size={15} />
+                Bulk Assign
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Classes Overview */}
@@ -1448,33 +1555,90 @@ const DesktopAssessmentApp = () => {
                     key={student.id}
                     className="p-3 rounded-lg bg-gray-50/80"
                   >
-                    <div className="font-medium text-gray-800">
-                      {student.firstName} {student.lastName}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      ID: {student.studentIdNumber}
-                    </div>
-                    {student.dateOfBirth && (
-                      <div className="text-xs text-gray-500">
-                        DOB: {new Date(student.dateOfBirth).toLocaleDateString()}
+                    {editingStudentInlineId === student.id ? (
+                      <div className="space-y-1.5">
+                        <div className="flex gap-1">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={editingStudentFirst}
+                            onChange={(e) => setEditingStudentFirst(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveInlineStudent(student);
+                              if (e.key === 'Escape') setEditingStudentInlineId(null);
+                            }}
+                            placeholder="First name"
+                            className="flex-1 min-w-0 px-2 py-1 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-[#1E3A5F]"
+                          />
+                          <input
+                            type="text"
+                            value={editingStudentLast}
+                            onChange={(e) => setEditingStudentLast(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveInlineStudent(student);
+                              if (e.key === 'Escape') setEditingStudentInlineId(null);
+                            }}
+                            placeholder="Last name"
+                            className="flex-1 min-w-0 px-2 py-1 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-[#1E3A5F]"
+                          />
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleSaveInlineStudent(student)}
+                            disabled={updateStudentInline.isPending}
+                            className="flex-1 px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+                          >
+                            {updateStudentInline.isPending ? 'Saving…' : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => setEditingStudentInlineId(null)}
+                            className="flex-1 px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
+                    ) : (
+                      <>
+                        <button
+                          className="font-medium text-gray-800 hover:text-indigo-700 text-left w-full group flex items-center gap-1"
+                          title="Click to edit name"
+                          onClick={() => {
+                            setEditingStudentInlineId(student.id);
+                            setEditingStudentFirst(student.firstName);
+                            setEditingStudentLast(student.lastName);
+                          }}
+                        >
+                          {student.firstName} {student.lastName}
+                          <Edit2 size={11} className="opacity-0 group-hover:opacity-50 transition-opacity flex-shrink-0" />
+                        </button>
+                        <div className="text-xs text-gray-500 mt-1">
+                          ID: {student.studentIdNumber}
+                        </div>
+                        {student.dateOfBirth && (
+                          <div className="text-xs text-gray-500">
+                            DOB: {new Date(student.dateOfBirth).toLocaleDateString()}
+                          </div>
+                        )}
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            onClick={() => handleEditStudent(student)}
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                            title="Edit all student details"
+                          >
+                            <Edit2 size={12} />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteStudent(student.id, `${student.firstName} ${student.lastName}`)}
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100"
+                          >
+                            <Trash2 size={12} />
+                            Remove
+                          </button>
+                        </div>
+                      </>
                     )}
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        onClick={() => handleEditStudent(student)}
-                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                      >
-                        <Edit2 size={12} />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteStudent(student.id, `${student.firstName} ${student.lastName}`)}
-                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100"
-                      >
-                        <Trash2 size={12} />
-                        Remove
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>
@@ -1510,7 +1674,7 @@ const DesktopAssessmentApp = () => {
                   {classes.length > 0 ? (
                     <div className="mt-2">
                       <select
-                        className="w-full text-xs px-2 py-1.5 border border-amber-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                        className="w-full text-xs px-2 py-1.5 border border-amber-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#1E3A5F] disabled:opacity-50"
                         defaultValue=""
                         disabled={assigningStudentId === student.id}
                         onChange={(e) => {
@@ -1585,12 +1749,43 @@ const DesktopAssessmentApp = () => {
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
+          {/* Offline indicator */}
+          {!isOnline && (
+            <div className="flex items-center gap-1.5 bg-amber-500 text-white text-xs px-2.5 py-1 rounded-full font-medium" title="You are offline — assessments will be queued">
+              <span className="w-2 h-2 bg-white rounded-full opacity-80 animate-pulse" />
+              Offline
+              {queueCount > 0 && <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded-full">{queueCount} queued</span>}
+            </div>
+          )}
+          {/* Queue flush badge — shown when online but unsent items exist */}
+          {isOnline && queueCount > 0 && (
+            <div className="flex items-center gap-1.5 bg-indigo-600 text-white text-xs px-2.5 py-1 rounded-full font-medium" title="Syncing queued assessments…">
+              <span className="w-2 h-2 bg-white rounded-full opacity-80 animate-ping" />
+              {queueCount} syncing
+            </div>
+          )}
           <div className="hidden md:flex items-center gap-2 text-xs text-slate-200 bg-slate-700 px-3 py-1.5 rounded">
             <User size={14} />
             <span>{user?.firstName} {user?.lastName}</span>
             <span className="text-slate-400">|</span>
             <span className="text-slate-300">{user?.role?.replace('_', ' ')}</span>
           </div>
+          <button
+            onClick={() => setDarkMode(d => !d)}
+            className="flex items-center px-2 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors"
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <button
+            onClick={() => setShowCommandPalette(true)}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-xs transition-colors"
+            title="Open command palette (Cmd+K)"
+          >
+            <Search size={14} />
+            <span className="text-slate-400">⌘K</span>
+          </button>
           <button
             onClick={() => setShowChangePassword(true)}
             className="flex items-center gap-1 px-3 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-xs sm:text-sm transition-colors"
@@ -1608,6 +1803,18 @@ const DesktopAssessmentApp = () => {
           </button>
         </div>
       </header>
+
+      {/* Offline mode banner */}
+      {!isOnline && (
+        <div className="bg-amber-50 border-b border-amber-300 px-4 py-2 flex items-center gap-2 text-sm text-amber-800" role="alert">
+          <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse flex-shrink-0" />
+          <span>
+            <span className="font-medium">You're offline.</span>{' '}
+            Assessments you save will be queued and synced automatically when reconnected.
+            {queueCount > 0 && <span className="ml-1 font-medium">({queueCount} pending)</span>}
+          </span>
+        </div>
+      )}
 
       {/* Session expiry warning banner */}
       {sessionWarning && (
@@ -2113,31 +2320,52 @@ const DesktopAssessmentApp = () => {
         }}
       />
 
-      {/* Delete Confirmation Modal */}
-      <ConfirmModal
-        isOpen={confirmModal.isOpen}
-        onClose={closeDeleteConfirm}
-        onConfirm={handleConfirmDelete}
-        isLoading={isDeleting}
-        variant="danger"
-        title={
-          confirmModal.type === 'assessment' ? 'Delete Assessment' :
-          confirmModal.type === 'class' ? 'Delete Class' :
-          confirmModal.type === 'student' ? 'Remove Student' : 'Confirm Delete'
-        }
-        message={
-          confirmModal.type === 'assessment'
-            ? `Are you sure you want to delete this assessment${confirmModal.data?.date ? ` from ${confirmModal.data.date}` : ''}? This action cannot be undone.`
-            : confirmModal.type === 'class'
-            ? `Are you sure you want to delete "${confirmModal.data?.name}"? Students in this class will become unassigned.`
-            : confirmModal.type === 'student'
-            ? `Are you sure you want to remove "${confirmModal.data?.name}"? This will also delete their assessment history.`
-            : 'Are you sure you want to proceed?'
-        }
-        confirmText={
-          confirmModal.type === 'student' ? 'Remove Student' : 'Delete'
-        }
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        students={accessibleStudents}
+        classes={classes}
+        subjects={subjects}
+        onNavigate={(view) => setCurrentView(view)}
+        onSelectStudent={(id) => setSelectedStudent(id)}
+        onSelectSubject={(id) => setSelectedSubject(id)}
       />
+
+      {/* Undo bar — appears at bottom when deletions are pending */}
+      {undoItems.length > 0 && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-4 z-50"
+          role="status"
+          aria-live="polite"
+          style={{ minWidth: '280px', maxWidth: '480px' }}
+        >
+          <div className="flex-1 text-sm">
+            {undoItems.length === 1
+              ? <span><span className="font-medium">{undoItems[0].label}</span> will be deleted</span>
+              : <span><span className="font-medium">{undoItems.length} items</span> will be deleted</span>
+            }
+          </div>
+          <button
+            onClick={() => handleUndoDelete(undoItems[undoItems.length - 1].id)}
+            className="text-sm bg-white text-gray-900 px-3 py-1.5 rounded-lg font-semibold hover:bg-gray-100 flex-shrink-0"
+          >
+            Undo
+          </button>
+          {undoItems.length > 1 && (
+            <button
+              onClick={() => {
+                undoItems.forEach(i => clearTimeout(i.timeoutId));
+                setUndoItems([]);
+              }}
+              className="text-gray-400 hover:text-white flex-shrink-0"
+              aria-label="Dismiss all"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Footer */}
       <AppFooter />
@@ -2200,7 +2428,7 @@ const DesktopAssessmentApp = () => {
                     onChange={(e) => setCreateTermForm(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g. Term 1"
                     autoFocus
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] text-sm"
                   />
                 </div>
                 <div>
@@ -2210,7 +2438,7 @@ const DesktopAssessmentApp = () => {
                     value={createTermForm.schoolYear}
                     onChange={(e) => setCreateTermForm(prev => ({ ...prev, schoolYear: e.target.value }))}
                     placeholder="e.g. 2025-2026"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] text-sm"
                   />
                 </div>
               </div>
@@ -2221,7 +2449,7 @@ const DesktopAssessmentApp = () => {
                     type="date"
                     value={createTermForm.startDate}
                     onChange={(e) => setCreateTermForm(prev => ({ ...prev, startDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] text-sm"
                   />
                 </div>
                 <div>
@@ -2230,7 +2458,7 @@ const DesktopAssessmentApp = () => {
                     type="date"
                     value={createTermForm.endDate}
                     onChange={(e) => setCreateTermForm(prev => ({ ...prev, endDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] text-sm"
                   />
                 </div>
               </div>

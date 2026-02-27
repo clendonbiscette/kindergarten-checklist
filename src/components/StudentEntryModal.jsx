@@ -91,7 +91,7 @@ const StudentEntryModal = ({ isOpen, onClose, onSuccess, schoolId, classId }) =>
                 value={formData.firstName}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
                 placeholder="John"
               />
             </div>
@@ -107,7 +107,7 @@ const StudentEntryModal = ({ isOpen, onClose, onSuccess, schoolId, classId }) =>
                 value={formData.lastName}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
                 placeholder="Doe"
               />
             </div>
@@ -123,7 +123,7 @@ const StudentEntryModal = ({ isOpen, onClose, onSuccess, schoolId, classId }) =>
               type="text"
               value={formData.studentIdNumber}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
               placeholder="e.g., 2024-001"
             />
           </div>
@@ -138,7 +138,7 @@ const StudentEntryModal = ({ isOpen, onClose, onSuccess, schoolId, classId }) =>
               type="date"
               value={formData.dateOfBirth}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
             />
           </div>
 
@@ -159,7 +159,7 @@ const StudentEntryModal = ({ isOpen, onClose, onSuccess, schoolId, classId }) =>
             <button
               type="submit"
               disabled={createStudent.isPending}
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {createStudent.isPending ? 'Adding...' : 'Add Student'}
             </button>

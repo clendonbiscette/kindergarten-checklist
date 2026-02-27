@@ -21,6 +21,7 @@ import {
 import ConfirmModal from './ConfirmModal';
 import ChangePasswordModal from './ChangePasswordModal';
 import AppFooter from './AppFooter';
+import SuperuserWelcome from './SuperuserWelcome';
 import BulkImportStudents from './BulkImportStudents';
 import { useStudents } from '../hooks/useStudents';
 import { useTerms, useCreateTerm, useUpdateTerm, useDeleteTerm, useBulkCreateTerms } from '../hooks/useTerms';
@@ -172,6 +173,9 @@ const SuperuserDashboard = () => {
 
     return (
       <div className="space-y-6">
+        {/* Role-appropriate first-run welcome */}
+        <SuperuserWelcome userName={user?.firstName} />
+
         {/* Key Metrics */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg p-4 shadow-sm">
