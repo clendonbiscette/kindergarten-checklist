@@ -31,6 +31,10 @@ export const createAssessment = async (req, res, next) => {
 
     const teacherId = req.user.userId;
 
+    // Normalise to midnight UTC so same-day saves always hit the same key
+    const normalizedDate = new Date(assessmentDate);
+    normalizedDate.setUTCHours(0, 0, 0, 0);
+
     const include = {
       student: {
         select: { id: true, firstName: true, lastName: true },
@@ -46,45 +50,38 @@ export const createAssessment = async (req, res, next) => {
       },
     };
 
-    // Upsert: update existing assessment for this student+outcome+term, or create new
-    const existing = await prisma.assessment.findFirst({
-      where: { studentId, learningOutcomeId, termId },
-      select: { id: true },
-    });
-
-    let assessment;
-    let isUpdate = false;
-    if (existing) {
-      isUpdate = true;
-      assessment = await prisma.assessment.update({
-        where: { id: existing.id },
-        data: {
-          rating,
-          comment: comment || null,
-          assessmentDate: new Date(assessmentDate),
-          updatedBy: teacherId,
-        },
-        include,
-      });
-    } else {
-      assessment = await prisma.assessment.create({
-        data: {
+    // Upsert: same student + outcome + term + date → overwrite (correction on same day)
+    //         different date → new record (genuine reassessment on a later visit)
+    const assessment = await prisma.assessment.upsert({
+      where: {
+        studentId_learningOutcomeId_termId_assessmentDate: {
           studentId,
           learningOutcomeId,
-          teacherId,
           termId,
-          assessmentDate: new Date(assessmentDate),
-          rating,
-          comment: comment || null,
-          createdBy: teacherId,
+          assessmentDate: normalizedDate,
         },
-        include,
-      });
-    }
+      },
+      update: {
+        rating,
+        comment: comment || null,
+        updatedBy: teacherId,
+      },
+      create: {
+        studentId,
+        learningOutcomeId,
+        teacherId,
+        termId,
+        assessmentDate: normalizedDate,
+        rating,
+        comment: comment || null,
+        createdBy: teacherId,
+      },
+      include,
+    });
 
-    res.status(isUpdate ? 200 : 201).json({
+    res.status(200).json({
       success: true,
-      message: isUpdate ? 'Assessment updated successfully' : 'Assessment created successfully',
+      message: 'Assessment saved',
       data: assessment,
     });
   } catch (error) {

@@ -220,7 +220,7 @@ model Assessment {
   term              AcademicTerm     @relation(fields: [termId], references: [id])
   updater           User?            @relation("UpdatedAssessments", fields: [updatedBy], references: [id])
 
-  @@index([studentId, learningOutcomeId, assessmentDate])
+  @@unique([studentId, learningOutcomeId, termId, assessmentDate])
   @@index([teacherId, termId])
   @@map("assessments")
 }
