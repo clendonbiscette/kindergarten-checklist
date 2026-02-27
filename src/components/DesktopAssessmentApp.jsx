@@ -511,12 +511,26 @@ const DesktopAssessmentApp = () => {
     return assessments[0] || null;
   };
 
-  const handleSaveAssessment = async (outcome) => {
-    const rating = tempAssessments[outcome.id];
+  // Map of outcomeId → latest saved rating for the selected term (for display after auto-save)
+  const termRatingMap = useMemo(() => {
+    if (!selectedTerm) return {};
+    const map = {};
+    (studentAssessments || [])
+      .filter(a => a.termId === selectedTerm)
+      .sort((a, b) => new Date(a.assessmentDate) - new Date(b.assessmentDate))
+      .forEach(a => { map[a.learningOutcomeId] = a.rating; });
+    return map;
+  }, [studentAssessments, selectedTerm]);
+
+  // ratingOverride lets rating buttons pass the value directly (React state batching means
+  // tempAssessments won't have updated yet by the time handleSaveAssessment is called)
+  const handleSaveAssessment = async (outcome, ratingOverride = null) => {
+    const rating = ratingOverride ?? tempAssessments[outcome.id];
     const comment = tempComments[outcome.id] || '';
 
-    if (!rating || !selectedTerm) {
-      toast.warning('Please select a rating and ensure a term is selected');
+    if (!rating) return;
+    if (!selectedTerm) {
+      toast.warning('Please select a term first');
       return;
     }
 
@@ -611,14 +625,17 @@ const DesktopAssessmentApp = () => {
       if (rating) {
         e.preventDefault();
         setTempAssessments(prev => ({ ...prev, [focusedOutcomeId]: rating }));
+        const outcome = filteredOutcomes.find(o => o.id === focusedOutcomeId);
+        if (outcome) handleSaveAssessment(outcome, rating);
       }
 
-      // Enter key to save the focused outcome's assessment
-      if (e.key === 'Enter' && tempAssessments[focusedOutcomeId]) {
-        e.preventDefault();
+      // Enter key: re-save with current comment (useful when adding a note after rating)
+      if (e.key === 'Enter') {
         const outcome = filteredOutcomes.find(o => o.id === focusedOutcomeId);
-        if (outcome) {
-          handleSaveAssessment(outcome);
+        const pendingRating = tempAssessments[focusedOutcomeId];
+        if (outcome && pendingRating) {
+          e.preventDefault();
+          handleSaveAssessment(outcome, pendingRating);
         }
       }
     };
@@ -1019,7 +1036,8 @@ const DesktopAssessmentApp = () => {
         <div className="space-y-2">
           {filteredOutcomes.map(outcome => {
             const latestAssessment = getLatestAssessment(outcome.id);
-            const currentRating = tempAssessments[outcome.id];
+            // Optimistic temp state takes priority; falls back to DB-sourced rating for this term
+            const currentRating = tempAssessments[outcome.id] || termRatingMap[outcome.id] || null;
             const isFocused = focusedOutcomeId === outcome.id;
             const justSaved = recentlySavedIds.has(outcome.id);
 
@@ -1086,16 +1104,8 @@ const DesktopAssessmentApp = () => {
                           key={symbol}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setTempAssessments({...tempAssessments, [outcome.id]: rating});
-                            // Keyboard shortcut discovery — show hint after 5th mouse click
-                            if (!localStorage.getItem('ohpc_keyboard_hint_shown')) {
-                              const count = parseInt(localStorage.getItem('ohpc_rating_clicks') || '0') + 1;
-                              localStorage.setItem('ohpc_rating_clicks', count);
-                              if (count >= 5) {
-                                localStorage.setItem('ohpc_keyboard_hint_shown', 'true');
-                                setShowKeyboardHint(true);
-                              }
-                            }
+                            setTempAssessments(prev => ({ ...prev, [outcome.id]: rating }));
+                            handleSaveAssessment(outcome, rating);
                           }}
                           aria-label={`${label}${currentRating === rating ? ' (selected)' : ''}`}
                           aria-pressed={currentRating === rating}
@@ -1119,19 +1129,15 @@ const DesktopAssessmentApp = () => {
                     </div>
                     <input
                       type="text"
-                      placeholder="Comment (optional)"
+                      placeholder="Add a note (click rating to save)"
                       value={tempComments[outcome.id] || ''}
                       onChange={(e) => setTempComments({...tempComments, [outcome.id]: e.target.value})}
                       onClick={(e) => e.stopPropagation()}
                       className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:border-gray-300"
                     />
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleSaveAssessment(outcome); }}
-                      disabled={!currentRating || savingOutcomeIds.has(outcome.id)}
-                      className="w-full bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 disabled:opacity-50 text-sm"
-                    >
-                      {savingOutcomeIds.has(outcome.id) ? 'Saving...' : (isFocused ? 'Save (Enter)' : 'Save')}
-                    </button>
+                    {savingOutcomeIds.has(outcome.id) && (
+                      <p className="text-xs text-gray-400 text-center">Saving…</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1730,6 +1736,13 @@ const DesktopAssessmentApp = () => {
 
   return (
     <div className="h-screen flex flex-col bg-gray-100 overflow-hidden">
+      {/* Skip navigation — WCAG 2.4.1 */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-[#1E3A5F] focus:font-semibold focus:rounded focus:shadow-lg"
+      >
+        Skip to main content
+      </a>
       {/* Title Bar / Header */}
       <header className="bg-slate-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -1898,13 +1911,14 @@ const DesktopAssessmentApp = () => {
               </div>
 
               <div>
-                <label className="text-xs font-medium text-gray-700">Date</label>
+                <label className="text-xs font-medium text-gray-700">Assessment Date</label>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
                   className="w-full mt-1 px-2 py-1.5 border border-gray-200 rounded text-sm focus:border-gray-300"
                 />
+                <p className="mt-1 text-xs text-gray-400">Ratings are recorded on this date</p>
               </div>
             </div>
 
@@ -2041,6 +2055,37 @@ const DesktopAssessmentApp = () => {
                 </div>
               )}
             </div>
+            {/* Prev/Next student navigation — visible in assessment and report views when a student is selected */}
+            {selectedStudent && (currentView === 'data-entry' || currentView === 'learner-reports') && accessibleStudents.length > 1 && (() => {
+              const idx = accessibleStudents.findIndex(s => s.id === selectedStudent);
+              const prev = idx > 0 ? accessibleStudents[idx - 1] : null;
+              const next = idx < accessibleStudents.length - 1 ? accessibleStudents[idx + 1] : null;
+              return (
+                <div className="flex items-center gap-1 ml-3">
+                  <button
+                    onClick={() => prev && setSelectedStudent(prev.id)}
+                    disabled={!prev}
+                    className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
+                    title={prev ? `Previous: ${prev.firstName} ${prev.lastName}` : 'No previous student'}
+                    aria-label={prev ? `Previous student: ${prev.firstName} ${prev.lastName}` : 'No previous student'}
+                  >
+                    &#8592;
+                  </button>
+                  <span className="text-xs text-gray-400 tabular-nums">
+                    {idx + 1}/{accessibleStudents.length}
+                  </span>
+                  <button
+                    onClick={() => next && setSelectedStudent(next.id)}
+                    disabled={!next}
+                    className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
+                    title={next ? `Next: ${next.firstName} ${next.lastName}` : 'No next student'}
+                    aria-label={next ? `Next student: ${next.firstName} ${next.lastName}` : 'No next student'}
+                  >
+                    &#8594;
+                  </button>
+                </div>
+              );
+            })()}
             {selectedStudentObj && currentView === 'learner-reports' && (
               <div className="flex items-center gap-2">
                 <button
@@ -2065,28 +2110,9 @@ const DesktopAssessmentApp = () => {
             )}
           </div>
 
-          {/* Term Context Banner */}
-          {selectedTerm && currentView !== 'class-management' && (
-            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 px-4 sm:px-6 py-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar size={16} className="text-indigo-600" />
-                  <span className="text-gray-700">Working in:</span>
-                  <span className="font-semibold text-indigo-900">
-                    {terms.find(t => t.id === selectedTerm)?.name} ({terms.find(t => t.id === selectedTerm)?.schoolYear})
-                  </span>
-                </div>
-                <div className="text-xs text-gray-600 hidden sm:block">
-                  {currentView === 'data-entry' && 'New assessments will be saved to this term'}
-                  {currentView === 'learner-reports' && 'Showing assessments from this term only'}
-                  {currentView === 'analytics' && 'Analytics calculated for this term only'}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Scrollable Content Area */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div id="main-content" className="flex-1 overflow-y-auto p-4 sm:p-6">
             {/* No active term warning */}
             {selectedSchool && terms.length === 0 && currentView !== 'class-management' && (
               <div className="mb-4 flex items-start justify-between gap-3 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
