@@ -368,9 +368,12 @@ const DesktopAssessmentApp = () => {
     setSelectedStudent('');
   }, [selectedClassId]);
 
-  // Session expiry warning — show a banner 5 minutes before the JWT expires
+  // Session expiry warning — show a banner 5 minutes before the refresh token expires.
+  // We intentionally watch the refresh token (7-day session), not the short-lived access
+  // token (15 min), because access tokens auto-refresh silently on every API request.
+  // Basing this on the access token caused the banner to fire every ~10 min of active use.
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
+    const token = localStorage.getItem('refreshToken');
     if (!token) return;
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
@@ -1821,7 +1824,7 @@ const DesktopAssessmentApp = () => {
         <div className="bg-amber-50 border-b border-amber-300 px-4 py-2 flex items-center justify-between text-sm z-40" role="alert">
           <div className="flex items-center gap-2 text-amber-800">
             <Calendar size={15} className="flex-shrink-0" />
-            <span>Your session expires soon. Save your work — you'll be signed out automatically.</span>
+            <span>Your session expires in a few minutes. You&apos;ll need to sign in again soon.</span>
           </div>
           <button
             onClick={() => setSessionWarning(false)}
