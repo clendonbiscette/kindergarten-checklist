@@ -34,6 +34,7 @@ import CreateStudentModal from './CreateStudentModal';
 import AssessmentEditModal from './AssessmentEditModal';
 import TeacherWelcome from './TeacherWelcome';
 import ChangePasswordModal from './ChangePasswordModal';
+import UserProfileModal from './UserProfileModal';
 import AppFooter from './AppFooter';
 import CommandPalette from './CommandPalette';
 import { saveSession, getSession } from '../utils/sessionStorage';
@@ -132,6 +133,7 @@ const DesktopAssessmentApp = () => {
   const [editingAssessment, setEditingAssessment] = useState(null);
 
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [showCreateTermModal, setShowCreateTermModal] = useState(false);
   const [createTermForm, setCreateTermForm] = useState({ name: '', schoolYear: '', startDate: '', endDate: '' });
   const [createTermError, setCreateTermError] = useState('');
@@ -2076,12 +2078,16 @@ const DesktopAssessmentApp = () => {
               {queueCount} syncing
             </div>
           )}
-          <div className="hidden md:flex items-center gap-2 text-xs text-slate-200 bg-slate-700 px-3 py-1.5 rounded">
+          <button
+            onClick={() => setShowProfile(true)}
+            title="View profile"
+            className="hidden md:flex items-center gap-2 text-xs text-slate-200 bg-slate-700 px-3 py-1.5 rounded hover:bg-slate-600 transition-colors cursor-pointer"
+          >
             <User size={14} />
             <span>{user?.firstName} {user?.lastName}</span>
             <span className="text-slate-400">|</span>
             <span className="text-slate-300">{user?.role?.replace('_', ' ')}</span>
-          </div>
+          </button>
           <button
             onClick={() => setDarkMode(d => !d)}
             className="flex items-center px-2 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors"
@@ -2728,6 +2734,13 @@ const DesktopAssessmentApp = () => {
 
       {showChangePassword && (
         <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
+      )}
+
+      {showProfile && (
+        <UserProfileModal
+          onClose={() => setShowProfile(false)}
+          onChangePassword={() => { setShowProfile(false); setShowChangePassword(true); }}
+        />
       )}
 
       {/* Create Term Modal */}

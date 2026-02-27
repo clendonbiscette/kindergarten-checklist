@@ -75,4 +75,8 @@ export const authAPI = {
   changePassword: async (currentPassword, newPassword) => {
     return apiClient.post('/auth/change-password', { currentPassword, newPassword });
   },
+
+  updateProfile: async (data) => {
+    return apiClient.put('/auth/profile', data);
+  },
 };

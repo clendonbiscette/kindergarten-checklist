@@ -713,3 +713,45 @@ export const changePassword = async (req, res, next) => {
     next(error);
   }
 };
+
+export const updateProfile = async (req, res, next) => {
+  try {
+    const { firstName, lastName, email } = req.body;
+    const userId = req.user.userId;
+
+    // Validate at least one field is provided
+    if (!firstName && !lastName && !email) {
+      return res.status(400).json({ success: false, message: 'No fields to update' });
+    }
+
+    // If email is changing, check it is not already taken
+    if (email) {
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing && existing.id !== userId) {
+        return res.status(400).json({ success: false, message: 'Email is already in use by another account' });
+      }
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(firstName?.trim() && { firstName: firstName.trim() }),
+        ...(lastName?.trim() && { lastName: lastName.trim() }),
+        ...(email?.trim() && { email: email.trim() }),
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
+    res.status(200).json({ success: true, message: 'Profile updated', data: updated });
+  } catch (error) {
+    next(error);
+  }
+};

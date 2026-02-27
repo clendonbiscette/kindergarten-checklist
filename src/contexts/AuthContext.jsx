@@ -119,6 +119,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Merge updated profile fields into the stored user (call after PUT /auth/profile succeeds)
+  const updateUser = (updatedFields) => {
+    const updated = { ...user, ...updatedFields };
+    setUser(updated);
+    localStorage.setItem('user', JSON.stringify(updated));
+  };
+
   // Teacher self-assigns to a school (issues new tokens with updated schoolId)
   const assignSchool = async (schoolId) => {
     try {
@@ -146,6 +153,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     refreshUser,
     assignSchool,
+    updateUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
