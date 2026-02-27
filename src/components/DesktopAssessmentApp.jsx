@@ -242,26 +242,19 @@ const DesktopAssessmentApp = () => {
   // Track which student is being assigned (for loading state)
   const [assigningStudentId, setAssigningStudentId] = useState(null);
 
-  // Restore session on mount, with user's assigned school/country as fallback
+  // Restore session on mount — country/school always come from user profile (never from stale session)
   useEffect(() => {
     const savedSession = getSession();
     if (savedSession) {
-      if (savedSession.selectedCountry) setSelectedCountry(savedSession.selectedCountry);
-      if (savedSession.selectedSchool) setSelectedSchool(savedSession.selectedSchool);
       if (savedSession.selectedTerm) setSelectedTerm(savedSession.selectedTerm);
       if (savedSession.selectedDate) setSelectedDate(savedSession.selectedDate);
       if (savedSession.selectedSubject) setSelectedSubject(savedSession.selectedSubject);
       if (savedSession.selectedStudent) setSelectedStudent(savedSession.selectedStudent);
       if (savedSession.currentView) setCurrentView(savedSession.currentView);
-    } else {
-      // No saved session - use user's assigned school/country from registration/login
-      if (user?.countryId) {
-        setSelectedCountry(user.countryId);
-      }
-      if (user?.schoolId) {
-        setSelectedSchool(user.schoolId);
-      }
     }
+    // Country and school are always derived from the user's profile assignment
+    if (user?.countryId) setSelectedCountry(user.countryId);
+    if (user?.schoolId) setSelectedSchool(user.schoolId);
   }, [user?.countryId, user?.schoolId]);
 
   // After wizard: pre-select the class that was just created
@@ -272,25 +265,6 @@ const DesktopAssessmentApp = () => {
       localStorage.removeItem('ohpc_wizard_class_id');
     }
   }, []);
-
-  // Smart defaults: Auto-select country if only one available (and not already set by user assignment)
-  useEffect(() => {
-    if (!selectedCountry && countries.length === 1) {
-      setSelectedCountry(countries[0].id);
-    }
-  }, [countries, selectedCountry]);
-
-  // Smart defaults: Auto-select school if only one available (and not already set by user assignment)
-  useEffect(() => {
-    if (selectedCountry && !selectedSchool) {
-      // Check if user has an assigned school in this country
-      if (user?.schoolId && schools.some(s => s.id === user.schoolId)) {
-        setSelectedSchool(user.schoolId);
-      } else if (schools.length === 1) {
-        setSelectedSchool(schools[0].id);
-      }
-    }
-  }, [schools, selectedCountry, selectedSchool, user?.schoolId]);
 
   // Smart defaults: Auto-select current/active term
   useEffect(() => {
@@ -322,15 +296,13 @@ const DesktopAssessmentApp = () => {
   // Save session when key selections change
   useEffect(() => {
     saveSession({
-      selectedCountry,
-      selectedSchool,
       selectedTerm,
       selectedDate,
       selectedSubject,
       selectedStudent,
       currentView
     });
-  }, [selectedCountry, selectedSchool, selectedTerm, selectedDate, selectedSubject, selectedStudent, currentView]);
+  }, [selectedTerm, selectedDate, selectedSubject, selectedStudent, currentView]);
 
   // Helper functions
   const getRatingValue = (symbol) => {
