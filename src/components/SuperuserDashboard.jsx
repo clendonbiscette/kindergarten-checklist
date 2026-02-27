@@ -23,7 +23,7 @@ import ChangePasswordModal from './ChangePasswordModal';
 import AppFooter from './AppFooter';
 import BulkImportStudents from './BulkImportStudents';
 import { useStudents } from '../hooks/useStudents';
-import { useTerms, useCreateTerm, useUpdateTerm, useDeleteTerm } from '../hooks/useTerms';
+import { useTerms, useCreateTerm, useUpdateTerm, useDeleteTerm, useBulkCreateTerms } from '../hooks/useTerms';
 
 const SuperuserDashboard = () => {
   const { user, logout } = useAuth();
@@ -47,6 +47,7 @@ const SuperuserDashboard = () => {
   const [selectedSchoolForTerms, setSelectedSchoolForTerms] = useState('');
   const [showTermModal, setShowTermModal] = useState(false);
   const [editingTerm, setEditingTerm] = useState(null);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
 
   // Fetch data
@@ -444,14 +445,29 @@ const SuperuserDashboard = () => {
   const renderTerms = () => {
     return (
       <div className="space-y-4">
-        {/* Toolbar */}
+        {/* Broadcast banner */}
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <p className="font-medium text-purple-800 text-sm">Broadcast a term to multiple schools at once</p>
+            <p className="text-purple-600 text-xs mt-0.5">Create the same term for all schools, all schools in a country, or a custom selection.</p>
+          </div>
+          <button
+            onClick={() => setShowBroadcastModal(true)}
+            className="shrink-0 flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm font-medium"
+          >
+            <Calendar size={16} />
+            Broadcast Term
+          </button>
+        </div>
+
+        {/* Per-school toolbar */}
         <div className="flex flex-col sm:flex-row gap-3 bg-white p-4 rounded-lg shadow-sm">
           <select
             value={selectedSchoolForTerms}
             onChange={(e) => { setSelectedSchoolForTerms(e.target.value); setEditingTerm(null); }}
             className="flex-1 px-3 py-2 border border-gray-200 rounded-md text-sm min-w-[250px]"
           >
-            <option value="">Select a school to manage its terms...</option>
+            <option value="">Or select a school to manage its terms individually...</option>
             {schools.map((s) => (
               <option key={s.id} value={s.id}>{s.name} ({s.country?.name})</option>
             ))}
@@ -844,6 +860,15 @@ const SuperuserDashboard = () => {
           schoolId={selectedSchoolForTerms}
           onClose={() => { setShowTermModal(false); setEditingTerm(null); }}
           onSuccess={() => { setShowTermModal(false); setEditingTerm(null); }}
+        />
+      )}
+
+      {showBroadcastModal && (
+        <BroadcastTermModal
+          countries={countries}
+          schools={schools}
+          onClose={() => setShowBroadcastModal(false)}
+          onSuccess={() => setShowBroadcastModal(false)}
         />
       )}
 
@@ -1370,6 +1395,193 @@ const CreateSchoolModal = ({ countries, onClose, onSubmit, isLoading }) => {
               className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
             >
               {isLoading ? 'Creating...' : 'Create School'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const BroadcastTermModal = ({ countries, schools, onClose, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    schoolYear: new Date().getFullYear() + '-' + (new Date().getFullYear() + 1),
+    startDate: '',
+    endDate: '',
+  });
+  const [scope, setScope] = useState('all');
+  const [countryId, setCountryId] = useState('');
+  const [selectedSchoolIds, setSelectedSchoolIds] = useState([]);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState(null);
+  const bulkCreate = useBulkCreateTerms();
+
+  const filteredSchools = scope === 'country' && countryId
+    ? schools.filter(s => s.countryId === countryId)
+    : schools;
+
+  const previewCount =
+    scope === 'all' ? schools.length
+    : scope === 'country' ? filteredSchools.length
+    : selectedSchoolIds.length;
+
+  const toggleSchool = (id) => {
+    setSelectedSchoolIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!formData.name || !formData.schoolYear || !formData.startDate || !formData.endDate) {
+      setError('Please fill in all term fields');
+      return;
+    }
+    if (previewCount === 0) {
+      setError('No schools match the selected scope');
+      return;
+    }
+    try {
+      const payload = {
+        ...formData,
+        scope,
+        ...(scope === 'country' && { countryId }),
+        ...(scope === 'schools' && { schoolIds: selectedSchoolIds }),
+      };
+      const res = await bulkCreate.mutateAsync(payload);
+      setResult(res.message || `Term created for ${res.data?.count} school(s).`);
+    } catch (err) {
+      setError(err.message || 'Failed to broadcast term');
+    }
+  };
+
+  if (result) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-8 text-center">
+          <Calendar size={48} className="mx-auto text-purple-500 mb-4" />
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Term Broadcast Complete</h2>
+          <p className="text-gray-600 mb-6">{result}</p>
+          <button onClick={onSuccess} className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700">Done</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b shrink-0">
+          <h2 className="text-xl font-bold text-gray-800">Broadcast Term to Schools</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700"><X size={24} /></button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+          {/* Term fields */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Term Name *</label>
+              <input type="text" value={formData.name}
+                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="e.g., Term 1, Fall Semester" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">School Year *</label>
+              <input type="text" value={formData.schoolYear}
+                onChange={e => setFormData({ ...formData, schoolYear: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="e.g., 2025-26" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
+              <input type="date" value={formData.startDate}
+                onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
+              <input type="date" value={formData.endDate}
+                onChange={e => setFormData({ ...formData, endDate: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+            </div>
+          </div>
+
+          {/* Scope selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Apply to</label>
+            <div className="flex gap-2">
+              {[
+                { value: 'all', label: 'All Schools' },
+                { value: 'country', label: 'By Country' },
+                { value: 'schools', label: 'Select Schools' },
+              ].map(opt => (
+                <button key={opt.value} type="button"
+                  onClick={() => { setScope(opt.value); setSelectedSchoolIds([]); }}
+                  className={`flex-1 py-2 px-3 text-sm rounded-md border transition-colors ${
+                    scope === opt.value
+                      ? 'bg-purple-600 text-white border-purple-600'
+                      : 'text-gray-600 border-gray-200 hover:border-purple-300'
+                  }`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Country picker */}
+          {scope === 'country' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Country *</label>
+              <select value={countryId} onChange={e => setCountryId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
+                <option value="">Select a country...</option>
+                {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* School multi-select */}
+          {scope === 'schools' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Schools ({selectedSchoolIds.length} selected)
+              </label>
+              <div className="border border-gray-200 rounded-md max-h-44 overflow-y-auto divide-y">
+                {schools.map(s => (
+                  <label key={s.id} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" checked={selectedSchoolIds.includes(s.id)}
+                      onChange={() => toggleSchool(s.id)}
+                      className="rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+                    <span className="text-sm text-gray-700">{s.name}</span>
+                    <span className="text-xs text-gray-400 ml-auto">{s.country?.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Preview */}
+          <div className={`rounded-md px-4 py-2.5 text-sm font-medium ${
+            previewCount > 0 ? 'bg-purple-50 text-purple-700' : 'bg-gray-50 text-gray-500'
+          }`}>
+            {previewCount > 0
+              ? `This will create "${formData.name || 'the term'}" for ${previewCount} school${previewCount !== 1 ? 's' : ''}.`
+              : 'No schools selected.'}
+          </div>
+
+          {error && <div className="bg-red-50 text-red-700 px-4 py-3 rounded text-sm">{error}</div>}
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-200 rounded-md text-gray-700 hover:bg-gray-50 text-sm">
+              Cancel
+            </button>
+            <button type="submit" disabled={bulkCreate.isPending || previewCount === 0}
+              className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 text-sm font-medium">
+              {bulkCreate.isPending ? 'Creating...' : `Create for ${previewCount} School${previewCount !== 1 ? 's' : ''}`}
             </button>
           </div>
         </form>

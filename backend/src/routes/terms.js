@@ -5,6 +5,7 @@ import {
   createTerm,
   updateTerm,
   deleteTerm,
+  bulkCreateTerms,
 } from '../controllers/termController.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 
@@ -27,5 +28,8 @@ router.put('/:id', authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'), upda
 
 // Delete term (admins only)
 router.delete('/:id', authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'), deleteTerm);
+
+// Bulk-create the same term across multiple schools (Superuser only)
+router.post('/bulk', authorize('SUPERUSER'), bulkCreateTerms);
 
 export default router;

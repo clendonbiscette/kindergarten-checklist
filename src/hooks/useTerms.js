@@ -57,3 +57,15 @@ export const useDeleteTerm = () => {
     },
   });
 };
+
+// Bulk-create the same term across multiple schools
+export const useBulkCreateTerms = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload) => termsAPI.bulkCreate(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['terms']);
+    },
+  });
+};

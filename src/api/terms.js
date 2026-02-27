@@ -25,4 +25,9 @@ export const termsAPI = {
   delete: async (id) => {
     return apiClient.delete(`/terms/${id}`);
   },
+
+  // Bulk-create the same term across multiple schools
+  bulkCreate: async (payload) => {
+    return apiClient.post('/terms/bulk', payload);
+  },
 };
