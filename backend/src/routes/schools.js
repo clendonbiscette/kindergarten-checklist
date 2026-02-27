@@ -39,6 +39,6 @@ router.post('/', authorize('COUNTRY_ADMIN', 'SUPERUSER'), createSchool);
 
 // Academic terms
 router.get('/:schoolId/terms', verifySchoolAccess, getSchoolTerms);
-router.post('/terms', authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN'), createTerm);
+router.post('/terms', authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN'), verifySchoolAccess, createTerm);
 
 export default router;

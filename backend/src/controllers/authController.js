@@ -715,20 +715,20 @@ export const changePassword = async (req, res, next) => {
       });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    const valid = await bcrypt.compare(currentPassword, user.password);
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!valid) {
       return res.status(400).json({ success: false, message: 'Current password is incorrect' });
     }
 
     const hashed = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({
-      where: { id: req.user.id },
-      data: { password: hashed },
+      where: { id: req.user.userId },
+      data: { passwordHash: hashed },
     });
 
     res.status(200).json({ success: true, message: 'Password changed successfully' });

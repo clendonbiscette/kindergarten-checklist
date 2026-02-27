@@ -38,6 +38,14 @@ export const offlineQueue = {
     this._notify();
   },
 
+  incrementFailure(index) {
+    const queue = this.getAll();
+    if (!queue[index]) return;
+    queue[index]._failureCount = (queue[index]._failureCount || 0) + 1;
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    // No _notify — count didn't change, no UI update needed
+  },
+
   clear() {
     localStorage.removeItem(QUEUE_KEY);
     this._notify();

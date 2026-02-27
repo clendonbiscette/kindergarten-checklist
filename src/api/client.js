@@ -57,7 +57,8 @@ apiClient.interceptors.response.use(
           localStorage.removeItem('authToken');
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('user');
-          window.location.href = '/login';
+          sessionStorage.setItem('ohpc-session-expired', '1');
+          window.location.href = '/';
           return Promise.reject(error.response.data);
         }
 
@@ -97,7 +98,8 @@ apiClient.interceptors.response.use(
           localStorage.removeItem('authToken');
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('user');
-          window.location.href = '/login';
+          sessionStorage.setItem('ohpc-session-expired', '1');
+          window.location.href = '/';
           return Promise.reject(refreshError);
         } finally {
           isRefreshing = false;

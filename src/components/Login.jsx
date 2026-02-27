@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../api/auth';
 import TeacherRegistration from './TeacherRegistration';
@@ -7,6 +7,7 @@ import { ClipboardCheck, BookOpen, Star } from 'lucide-react';
 
 const Login = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,6 +17,21 @@ const Login = () => {
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
   const { login } = useAuth();
+
+  // Auto-open teacher registration when linked via ?register=teacher
+  useEffect(() => {
+    if (searchParams.get('register') === 'teacher') {
+      setShowRegistration(true);
+    }
+  }, [searchParams]);
+
+  // Show session-expired message when redirected from an expired session
+  useEffect(() => {
+    if (sessionStorage.getItem('ohpc-session-expired')) {
+      sessionStorage.removeItem('ohpc-session-expired');
+      setError('Your session expired. Please sign in again. Any in-progress work was saved as a draft.');
+    }
+  }, []);
 
   if (showRegistration) {
     return <TeacherRegistration onBackToLogin={() => setShowRegistration(false)} />;

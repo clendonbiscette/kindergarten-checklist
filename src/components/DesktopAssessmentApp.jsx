@@ -67,6 +67,9 @@ const DesktopAssessmentApp = () => {
   // Offline queue state
   const [queueCount, setQueueCount] = useState(offlineQueue.count());
 
+  // Track which outcome IDs are currently being saved to prevent double-submit
+  const [savingOutcomeIds, setSavingOutcomeIds] = useState(new Set());
+
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: null, data: null });
   const [isDeleting, setIsDeleting] = useState(false);
@@ -130,31 +133,52 @@ const DesktopAssessmentApp = () => {
   const handleDismissDraft = () => {
     localStorage.removeItem('ohpc_draft_assessments');
     setDraftBanner(null);
+    // Also clear in-memory state so the auto-save effect can't immediately re-write the draft
+    setTempAssessments({});
+    setTempComments({});
   };
 
-  // Flush offline queue when connectivity is restored
+  // Flush offline queue when connectivity is restored (or immediately on mount if already online)
   useEffect(() => {
+    const MAX_RETRIES = 3;
+
     const flushQueue = async () => {
       const items = offlineQueue.getAll();
       if (items.length === 0) return;
 
       let flushed = 0;
+      let evicted = 0;
       // Process in reverse so removals don't shift indices
       for (let i = items.length - 1; i >= 0; i--) {
         try {
-          const { _queuedAt, ...payload } = items[i];
+          const { _queuedAt, _failureCount, ...payload } = items[i];
           await createAssessment.mutateAsync(payload);
           offlineQueue.remove(i);
           flushed++;
         } catch {
-          // Leave in queue for next retry
+          const failures = (items[i]._failureCount || 0) + 1;
+          if (failures >= MAX_RETRIES) {
+            offlineQueue.remove(i);
+            evicted++;
+          } else {
+            offlineQueue.incrementFailure(i);
+          }
         }
       }
       setQueueCount(offlineQueue.count());
       if (flushed > 0) {
         toast.success(`${flushed} queued assessment${flushed !== 1 ? 's' : ''} saved`);
       }
+      if (evicted > 0) {
+        toast.error(`${evicted} queued assessment${evicted !== 1 ? 's' : ''} could not be saved after ${MAX_RETRIES} attempts and were removed.`);
+      }
     };
+
+    // Flush immediately on mount — handles the case where the app is opened
+    // already online after being offline (no offline→online transition fires).
+    if (navigator.onLine) {
+      flushQueue();
+    }
 
     window.addEventListener('online', flushQueue);
     return () => window.removeEventListener('online', flushQueue);
@@ -374,6 +398,10 @@ const DesktopAssessmentApp = () => {
       return;
     }
 
+    // Prevent double-submit for the same outcome
+    if (savingOutcomeIds.has(outcome.id)) return;
+    setSavingOutcomeIds(prev => new Set(prev).add(outcome.id));
+
     const payload = {
       studentId: selectedStudent,
       learningOutcomeId: outcome.id,
@@ -417,6 +445,8 @@ const DesktopAssessmentApp = () => {
       } else {
         toast.error('Failed to save assessment: ' + (error.message || 'Unknown error'));
       }
+    } finally {
+      setSavingOutcomeIds(prev => { const next = new Set(prev); next.delete(outcome.id); return next; });
     }
   };
 
@@ -630,6 +660,21 @@ const DesktopAssessmentApp = () => {
     }
 
     if (!selectedStudent || !selectedSubject) {
+      // If the class has no students yet, show a helpful empty state with instructions
+      if (students.length === 0) {
+        return (
+          <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+            <div className="text-center max-w-sm">
+              <Users className="mx-auto text-gray-400 mb-3" size={48} />
+              <p className="text-gray-700 font-medium">No students in this class yet</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Ask your School Administrator to add students to your class, or contact your school office.
+              </p>
+            </div>
+          </div>
+        );
+      }
+
       // Show quick stats summary when term is selected but student/subject not yet selected
       const termStudentCount = students.length;
       const termAssessmentCount = termAssessments.length;
@@ -877,10 +922,10 @@ const DesktopAssessmentApp = () => {
                     />
                     <button
                       onClick={(e) => { e.stopPropagation(); handleSaveAssessment(outcome); }}
-                      disabled={!currentRating || createAssessment.isPending}
+                      disabled={!currentRating || savingOutcomeIds.has(outcome.id)}
                       className="w-full bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 disabled:opacity-50 text-sm"
                     >
-                      {createAssessment.isPending ? 'Saving...' : (isFocused ? 'Save (Enter)' : 'Save')}
+                      {savingOutcomeIds.has(outcome.id) ? 'Saving...' : (isFocused ? 'Save (Enter)' : 'Save')}
                     </button>
                   </div>
                 </div>
