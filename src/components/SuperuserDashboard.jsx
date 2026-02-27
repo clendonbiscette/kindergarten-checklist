@@ -53,6 +53,12 @@ const SuperuserDashboard = () => {
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
 
+  // Support tab state
+  const [supportStatusFilter, setSupportStatusFilter] = useState('');
+  const [supportCategoryFilter, setSupportCategoryFilter] = useState('');
+  const [supportSearch, setSupportSearch] = useState('');
+  const [openTicketId, setOpenTicketId] = useState(null);
+
   // Fetch data
   const { data: stats, isLoading: loadingStats } = useAdminStats();
   const { data: usersData, isLoading: loadingUsers, refetch: refetchUsers } = useAdminUsers({
@@ -69,6 +75,11 @@ const SuperuserDashboard = () => {
     selectedSchoolForStudents ? { schoolId: selectedSchoolForStudents } : {}
   );
   const { data: terms = [], isLoading: loadingTerms } = useTerms(selectedSchoolForTerms || null);
+  const { data: supportData, isLoading: loadingSupport } = useAllTickets({
+    ...(supportStatusFilter && { status: supportStatusFilter }),
+    ...(supportCategoryFilter && { category: supportCategoryFilter }),
+    ...(supportSearch && { search: supportSearch }),
+  });
 
   // Mutations
   const createUser = useCreateUser();
@@ -808,16 +819,14 @@ const SuperuserDashboard = () => {
   };
 
   const renderSupport = () => {
-    const [statusFilter, setStatusFilter] = useState('');
-    const [categoryFilter, setCategoryFilter] = useState('');
-    const [search, setSearch] = useState('');
-    const [openTicketId, setOpenTicketId] = useState(null);
-
-    const { data, isLoading } = useAllTickets({
-      ...(statusFilter && { status: statusFilter }),
-      ...(categoryFilter && { category: categoryFilter }),
-      ...(search && { search }),
-    });
+    const statusFilter = supportStatusFilter;
+    const setStatusFilter = setSupportStatusFilter;
+    const categoryFilter = supportCategoryFilter;
+    const setCategoryFilter = setSupportCategoryFilter;
+    const search = supportSearch;
+    const setSearch = setSupportSearch;
+    const data = supportData;
+    const isLoading = loadingSupport;
 
     const tickets = data?.tickets || [];
     const STATUS_COLORS = { OPEN: 'bg-gray-100 text-gray-600', IN_PROGRESS: 'bg-blue-100 text-blue-700', RESOLVED: 'bg-green-100 text-green-700' };
