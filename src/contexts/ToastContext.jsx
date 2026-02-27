@@ -120,9 +120,11 @@ export function ToastProvider({ children }) {
     <ToastContext.Provider value={{ addToast, dismissToast, success, error, warning, info }}>
       {children}
 
-      {/* Toast container */}
+      {/* Toast container — live region so screen readers announce new toasts */}
       <div
         className="fixed bottom-4 right-4 z-50 flex flex-col gap-2"
+        aria-live="polite"
+        aria-atomic="false"
         aria-label="Notifications"
       >
         {toasts.map(toast => (

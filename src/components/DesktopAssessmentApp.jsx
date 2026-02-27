@@ -43,6 +43,71 @@ import { calculateClassStatistics, calculateRatingDistribution, calculateProgres
 import { ReportDashboard } from './reports';
 import { useStrands } from '../hooks/useCurriculum';
 
+// Searchable student picker — used in sidebar when there are more than 5 students
+function StudentSearch({ students, value, onChange }) {
+  const [query, setQuery] = useState('');
+  const filtered = query.trim()
+    ? students.filter(s =>
+        `${s.firstName} ${s.lastName}`.toLowerCase().includes(query.toLowerCase())
+      )
+    : students;
+
+  const selectedName = value
+    ? (() => { const s = students.find(x => x.id === value); return s ? `${s.firstName} ${s.lastName}` : ''; })()
+    : '';
+
+  return (
+    <div className="mt-1 space-y-1">
+      <div className="relative">
+        <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Search ${students.length} students...`}
+          className="w-full pl-6 pr-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          aria-label="Search students"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            aria-label="Clear search"
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
+      <select
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setQuery(''); }}
+        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+        size={Math.min(filtered.length + 1, 6)}
+        aria-label="Select student"
+      >
+        <option value="">{filtered.length === 0 ? 'No matches' : 'Select student...'}</option>
+        {filtered.map(s => (
+          <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>
+        ))}
+      </select>
+      {value && selectedName && (
+        <div className="flex items-center justify-between px-2 py-1 bg-indigo-50 border border-indigo-200 rounded text-xs">
+          <span className="font-medium text-indigo-900">{selectedName}</span>
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="text-indigo-500 hover:text-indigo-700"
+            aria-label="Clear student selection"
+          >
+            <X size={10} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const DesktopAssessmentApp = () => {
   const { user, logout } = useAuth();
   const toast = useToast();
@@ -75,6 +140,12 @@ const DesktopAssessmentApp = () => {
 
   // Track which outcome IDs are currently being saved to prevent double-submit
   const [savingOutcomeIds, setSavingOutcomeIds] = useState(new Set());
+
+  // Brief green highlight after a successful save (assessment card animation)
+  const [recentlySavedIds, setRecentlySavedIds] = useState(new Set());
+
+  // Session expiry warning (fires 5 min before JWT expires)
+  const [sessionWarning, setSessionWarning] = useState(false);
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: null, data: null });
@@ -271,6 +342,23 @@ const DesktopAssessmentApp = () => {
     setSelectedStudent('');
   }, [selectedClassId]);
 
+  // Session expiry warning — show a banner 5 minutes before the JWT expires
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (!payload.exp) return;
+      const expiresAt = payload.exp * 1000;
+      const msLeft = expiresAt - Date.now();
+      const warnMs = 5 * 60 * 1000;
+      if (msLeft <= 0) return;
+      if (msLeft <= warnMs) { setSessionWarning(true); return; }
+      const timerId = setTimeout(() => setSessionWarning(true), msLeft - warnMs);
+      return () => clearTimeout(timerId);
+    } catch { /* ignore malformed token */ }
+  }, [user]);
+
   // Smart defaults: Auto-select current/active term
   useEffect(() => {
     if (selectedSchool && !selectedTerm && terms.length > 0) {
@@ -308,6 +396,19 @@ const DesktopAssessmentApp = () => {
       currentView
     });
   }, [selectedTerm, selectedDate, selectedSubject, selectedStudent, currentView]);
+
+  // Update document title per view
+  useEffect(() => {
+    const titles = {
+      'data-entry': 'Assessment Entry',
+      'learner-reports': 'Student Reports',
+      'reports': 'Reports',
+      'analytics': 'Analytics',
+      'class-management': 'Class Management',
+    };
+    document.title = `${titles[currentView] || 'App'} — OHPC Kindergarten`;
+    return () => { document.title = 'OHPC Kindergarten Progress Checklist'; };
+  }, [currentView]);
 
   // Helper functions
   const getRatingValue = (symbol) => {
@@ -411,6 +512,10 @@ const DesktopAssessmentApp = () => {
       delete newComments[outcome.id];
       setTempComments(newComments);
 
+      // Trigger save animation on the card
+      setRecentlySavedIds(prev => new Set(prev).add(outcome.id));
+      setTimeout(() => setRecentlySavedIds(prev => { const next = new Set(prev); next.delete(outcome.id); return next; }), 1500);
+
       toast.success('Assessment saved successfully');
     } catch (error) {
       // If offline, queue for later sync instead of showing an error
@@ -508,8 +613,12 @@ const DesktopAssessmentApp = () => {
     }
   };
 
-  const handleDeleteAssessment = (assessmentId) => {
-    openDeleteConfirm('assessment', { id: assessmentId });
+  const handleDeleteAssessment = (assessment) => {
+    const id = typeof assessment === 'string' ? assessment : assessment.id;
+    const date = typeof assessment === 'object' && assessment.assessmentDate
+      ? new Date(assessment.assessmentDate).toLocaleDateString()
+      : null;
+    openDeleteConfirm('assessment', { id, date });
   };
 
   const handleDeleteClass = (classId, className) => {
@@ -825,6 +934,7 @@ const DesktopAssessmentApp = () => {
             const latestAssessment = getLatestAssessment(outcome.id);
             const currentRating = tempAssessments[outcome.id];
             const isFocused = focusedOutcomeId === outcome.id;
+            const justSaved = recentlySavedIds.has(outcome.id);
 
             return (
               <div
@@ -832,10 +942,12 @@ const DesktopAssessmentApp = () => {
                 onClick={() => setFocusedOutcomeId(outcome.id)}
                 onFocus={() => setFocusedOutcomeId(outcome.id)}
                 tabIndex={0}
-                className={`bg-white rounded-lg p-3 transition-all cursor-pointer ${
-                  isFocused
-                    ? 'ring-2 ring-indigo-500 shadow-lg'
-                    : 'shadow-sm hover:shadow-md'
+                className={`rounded-lg p-3 transition-all cursor-pointer ${
+                  justSaved
+                    ? 'bg-green-50 ring-2 ring-green-400 shadow-md'
+                    : isFocused
+                    ? 'bg-white ring-2 ring-indigo-500 shadow-lg'
+                    : 'bg-white shadow-sm hover:shadow-md'
                 }`}
               >
                 <div className="flex flex-col lg:flex-row lg:items-start gap-3">
@@ -877,13 +989,15 @@ const DesktopAssessmentApp = () => {
                   <div className="flex-shrink-0 space-y-2 lg:w-64">
                     <div className="flex gap-2">
                       {[
-                        { symbol: '+', key: '1', rating: 'EASILY_MEETING' },
-                        { symbol: '=', key: '2', rating: 'MEETING' },
-                        { symbol: 'x', key: '3', rating: 'NEEDS_PRACTICE' }
-                      ].map(({ symbol, key, rating }) => (
+                        { symbol: '+', key: '1', rating: 'EASILY_MEETING', label: 'Easily Meeting' },
+                        { symbol: '=', key: '2', rating: 'MEETING', label: 'Meeting' },
+                        { symbol: 'x', key: '3', rating: 'NEEDS_PRACTICE', label: 'Needs Practice' }
+                      ].map(({ symbol, key, rating, label }) => (
                         <button
                           key={symbol}
                           onClick={(e) => { e.stopPropagation(); setTempAssessments({...tempAssessments, [outcome.id]: rating}); }}
+                          aria-label={`${label}${currentRating === rating ? ' (selected)' : ''}`}
+                          aria-pressed={currentRating === rating}
                           className={`flex-1 h-10 rounded font-bold transition-all relative ${
                             currentRating === rating
                               ? symbol === '+' ? 'bg-green-500 text-white ring-2 ring-green-600'
@@ -891,7 +1005,7 @@ const DesktopAssessmentApp = () => {
                                 : 'bg-amber-500 text-white ring-2 ring-amber-600'
                               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
-                          title={`Press ${key} or ${symbol} when this outcome is selected`}
+                          title={`${label} — key ${key} or ${symbol}`}
                         >
                           {symbol}
                           {isFocused && (
@@ -1495,6 +1609,23 @@ const DesktopAssessmentApp = () => {
         </div>
       </header>
 
+      {/* Session expiry warning banner */}
+      {sessionWarning && (
+        <div className="bg-amber-50 border-b border-amber-300 px-4 py-2 flex items-center justify-between text-sm z-40" role="alert">
+          <div className="flex items-center gap-2 text-amber-800">
+            <Calendar size={15} className="flex-shrink-0" />
+            <span>Your session expires soon. Save your work — you'll be signed out automatically.</span>
+          </div>
+          <button
+            onClick={() => setSessionWarning(false)}
+            className="ml-4 text-amber-600 hover:text-amber-800 flex-shrink-0"
+            aria-label="Dismiss session warning"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <div className={`${sidebarOpen ? 'w-64' : 'w-0'} lg:w-64 bg-white shadow-sm transition-all duration-300 overflow-hidden flex flex-col`}>
@@ -1581,17 +1712,25 @@ const DesktopAssessmentApp = () => {
 
                 <div>
                   <label className="text-xs font-medium text-gray-700">Student</label>
-                  <select
-                    value={selectedStudent}
-                    onChange={(e) => setSelectedStudent(e.target.value)}
-                    disabled={!selectedSchool}
-                    className="w-full mt-1 px-2 py-1.5 border border-gray-200 rounded text-sm focus:border-gray-300 disabled:opacity-50"
-                  >
-                    <option value="">
-                      {!selectedSchool ? 'Select school first' : accessibleStudents.length === 0 ? (user?.role === 'TEACHER' ? 'No students in your classes' : 'No students enrolled') : `Select student (${accessibleStudents.length})...`}
-                    </option>
-                    {accessibleStudents.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
-                  </select>
+                  {accessibleStudents.length > 5 && selectedSchool ? (
+                    <StudentSearch
+                      students={accessibleStudents}
+                      value={selectedStudent}
+                      onChange={setSelectedStudent}
+                    />
+                  ) : (
+                    <select
+                      value={selectedStudent}
+                      onChange={(e) => setSelectedStudent(e.target.value)}
+                      disabled={!selectedSchool}
+                      className="w-full mt-1 px-2 py-1.5 border border-gray-200 rounded text-sm focus:border-gray-300 disabled:opacity-50"
+                    >
+                      <option value="">
+                        {!selectedSchool ? 'Select school first' : accessibleStudents.length === 0 ? (user?.role === 'TEACHER' ? 'No students in your classes' : 'No students enrolled') : `Select student (${accessibleStudents.length})...`}
+                      </option>
+                      {accessibleStudents.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                    </select>
+                  )}
                 </div>
 
                 <div>
@@ -1615,17 +1754,25 @@ const DesktopAssessmentApp = () => {
                 <h3 className="text-xs font-semibold text-gray-600 uppercase">Student</h3>
 
                 <div>
-                  <select
-                    value={selectedStudent}
-                    onChange={(e) => setSelectedStudent(e.target.value)}
-                    disabled={!selectedSchool}
-                    className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:border-gray-300 disabled:opacity-50"
-                  >
-                    <option value="">
-                      {!selectedSchool ? 'Select school first' : accessibleStudents.length === 0 ? (user?.role === 'TEACHER' ? 'No students in your classes' : 'No students enrolled') : `Select student (${accessibleStudents.length})...`}
-                    </option>
-                    {accessibleStudents.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
-                  </select>
+                  {accessibleStudents.length > 5 && selectedSchool ? (
+                    <StudentSearch
+                      students={accessibleStudents}
+                      value={selectedStudent}
+                      onChange={setSelectedStudent}
+                    />
+                  ) : (
+                    <select
+                      value={selectedStudent}
+                      onChange={(e) => setSelectedStudent(e.target.value)}
+                      disabled={!selectedSchool}
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:border-gray-300 disabled:opacity-50"
+                    >
+                      <option value="">
+                        {!selectedSchool ? 'Select school first' : accessibleStudents.length === 0 ? (user?.role === 'TEACHER' ? 'No students in your classes' : 'No students enrolled') : `Select student (${accessibleStudents.length})...`}
+                      </option>
+                      {accessibleStudents.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                    </select>
+                  )}
                 </div>
               </div>
             )}
@@ -1646,15 +1793,39 @@ const DesktopAssessmentApp = () => {
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Content Header */}
           <div className="bg-white shadow-sm px-4 sm:px-6 py-3 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-800 text-sm sm:text-base">
-              {navItems.find(n => n.id === currentView)?.label}
-            </h2>
+            <div>
+              <h2 className="font-semibold text-gray-800 text-sm sm:text-base">
+                {navItems.find(n => n.id === currentView)?.label}
+              </h2>
+              {/* Context breadcrumb */}
+              {(selectedTerm || selectedClassObj || selectedStudentObj) && (
+                <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5 flex-wrap">
+                  {selectedTerm && (
+                    <span className="text-indigo-700 font-medium">
+                      {terms.find(t => t.id === selectedTerm)?.name}
+                    </span>
+                  )}
+                  {selectedClassObj && (
+                    <>
+                      <ChevronRight size={12} className="text-gray-400" />
+                      <span className="text-gray-600">{selectedClassObj.name}</span>
+                    </>
+                  )}
+                  {selectedStudentObj && (
+                    <>
+                      <ChevronRight size={12} className="text-gray-400" />
+                      <span className="font-medium text-gray-700">{selectedStudentObj.firstName} {selectedStudentObj.lastName}</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
             {selectedStudentObj && currentView === 'learner-reports' && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleDownloadParentReport}
                   disabled={downloadingParentReport}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-[#7CB342] text-white rounded text-xs sm:text-sm hover:bg-[#6aa030] disabled:opacity-50"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-[#558B2F] text-white rounded text-xs sm:text-sm hover:bg-[#43731F] disabled:opacity-50"
                   title="Download a formatted PDF report to share with parents"
                 >
                   <Download size={16} />
@@ -1756,8 +1927,8 @@ const DesktopAssessmentApp = () => {
               </div>
             )}
 
-            {/* Welcome guide for new teachers */}
-            {showWelcome && currentView === 'data-entry' && (
+            {/* Welcome guide — shown once class and term are ready */}
+            {showWelcome && currentView === 'data-entry' && classes.length > 0 && terms.length > 0 && (
               <TeacherWelcome
                 onDismiss={handleDismissWelcome}
                 userName={user?.firstName}
@@ -1882,10 +2053,15 @@ const DesktopAssessmentApp = () => {
 
       {/* Assessment History Modal */}
       {showHistoryFor && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="history-modal-title"
+        >
           <div className="bg-white rounded-t-xl sm:rounded-lg w-full sm:max-w-2xl max-h-[80vh] sm:max-h-[70vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b p-4 flex items-center justify-between">
-              <h3 className="font-bold text-lg">Assessment History</h3>
+              <h3 id="history-modal-title" className="font-bold text-lg">Assessment History</h3>
               <button onClick={() => setShowHistoryFor(null)} className="p-2 hover:bg-gray-100 rounded">
                 <X size={20} />
               </button>
@@ -1907,7 +2083,7 @@ const DesktopAssessmentApp = () => {
                         </div>
                       </div>
                       <button
-                        onClick={() => handleDeleteAssessment(assessment.id)}
+                        onClick={() => handleDeleteAssessment(assessment)}
                         className="text-red-600 hover:text-red-800 text-sm"
                       >
                         Delete
@@ -1951,7 +2127,7 @@ const DesktopAssessmentApp = () => {
         }
         message={
           confirmModal.type === 'assessment'
-            ? 'Are you sure you want to delete this assessment? This action cannot be undone.'
+            ? `Are you sure you want to delete this assessment${confirmModal.data?.date ? ` from ${confirmModal.data.date}` : ''}? This action cannot be undone.`
             : confirmModal.type === 'class'
             ? `Are you sure you want to delete "${confirmModal.data?.name}"? Students in this class will become unassigned.`
             : confirmModal.type === 'student'
@@ -1972,11 +2148,16 @@ const DesktopAssessmentApp = () => {
 
       {/* Create Term Modal */}
       {showCreateTermModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-term-modal-title"
+        >
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-4 border-b">
               <div>
-                <h2 className="text-lg font-bold text-gray-800">Create Academic Term</h2>
+                <h2 id="create-term-modal-title" className="text-lg font-bold text-gray-800">Create Academic Term</h2>
                 <p className="text-sm text-gray-500">{user?.schoolName}</p>
               </div>
               <button onClick={() => { setShowCreateTermModal(false); setCreateTermError(''); setCreateTermForm({ name: '', schoolYear: '', startDate: '', endDate: '' }); }} className="text-gray-500 hover:text-gray-700">

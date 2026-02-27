@@ -77,12 +77,17 @@ const ChangePasswordModal = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="change-password-title"
+    >
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
             <Lock size={18} className="text-gray-600" />
-            <h2 className="font-semibold text-gray-800">Change Password</h2>
+            <h2 id="change-password-title" className="font-semibold text-gray-800">Change Password</h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
             <X size={18} />
@@ -101,7 +106,7 @@ const ChangePasswordModal = ({ onClose }) => {
               </div>
               <button
                 onClick={onClose}
-                className="w-full bg-[#7CB342] text-white py-2 rounded-lg font-medium hover:bg-[#689F38] transition-colors"
+                className="w-full bg-[#558B2F] text-white py-2 rounded-lg font-medium hover:bg-[#43731F] transition-colors"
               >
                 Done
               </button>
@@ -180,7 +185,7 @@ const ChangePasswordModal = ({ onClose }) => {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="flex-1 bg-[#7CB342] text-white py-2 rounded-lg hover:bg-[#689F38] font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-[#558B2F] text-white py-2 rounded-lg hover:bg-[#43731F] font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? 'Saving...' : 'Change Password'}
                 </button>

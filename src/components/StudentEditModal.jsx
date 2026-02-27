@@ -10,6 +10,7 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
     dateOfBirth: '',
     studentIdNumber: '',
     classId: '',
+    isActive: true,
   });
   const [error, setError] = useState('');
 
@@ -29,13 +30,14 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
         dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth).toISOString().split('T')[0] : '',
         studentIdNumber: student.studentIdNumber || '',
         classId: student.classId || '',
+        isActive: student.isActive !== false,
       });
     }
   }, [student]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   const handleSubmit = async (e) => {
@@ -56,6 +58,7 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
           dateOfBirth: formData.dateOfBirth || null,
           studentIdNumber: formData.studentIdNumber,
           classId: formData.classId || null,
+          isActive: formData.isActive,
         },
       });
 
@@ -73,13 +76,19 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
   if (!isOpen || !student) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="student-edit-title"
+    >
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-bold text-gray-800">Edit Student</h2>
+          <h2 id="student-edit-title" className="text-xl font-bold text-gray-800">Edit Student</h2>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700"
+            aria-label="Close"
           >
             <X size={24} />
           </button>
@@ -172,6 +181,40 @@ const StudentEditModal = ({ isOpen, onClose, onSuccess, student }) => {
               Assign this student to a class or leave unassigned
             </p>
           </div>
+
+          {/* Active status toggle */}
+          <div className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div>
+              <label htmlFor="isActive" className="text-sm font-medium text-gray-700 cursor-pointer">
+                Active Student
+              </label>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Inactive students are hidden from assessment entry
+              </p>
+            </div>
+            <button
+              type="button"
+              id="isActive"
+              role="switch"
+              aria-checked={formData.isActive}
+              onClick={() => setFormData(prev => ({ ...prev, isActive: !prev.isActive }))}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                formData.isActive ? 'bg-indigo-600' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  formData.isActive ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {!formData.isActive && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+              This student will be hidden from assessment entry but their records are preserved.
+            </div>
+          )}
 
           {error && (
             <div className="bg-red-50 text-red-700 px-4 py-3 rounded text-sm">

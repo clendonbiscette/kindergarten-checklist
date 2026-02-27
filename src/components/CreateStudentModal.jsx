@@ -50,11 +50,16 @@ const CreateStudentModal = ({ isOpen, onClose, onSuccess, classId, className }) 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-student-title"
+    >
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between p-4 border-b">
           <div>
-            <h2 className="text-lg font-bold text-gray-800">Add New Student</h2>
+            <h2 id="create-student-title" className="text-lg font-bold text-gray-800">Add New Student</h2>
             {className && (
               <p className="text-sm text-gray-500">Adding to {className}</p>
             )}

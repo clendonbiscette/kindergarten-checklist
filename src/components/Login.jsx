@@ -210,7 +210,7 @@ const Login = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#7CB342] text-white py-3 px-4 rounded-lg hover:bg-[#689F38] focus:outline-none focus:ring-2 focus:ring-[#7CB342] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg transition-colors"
+              className="w-full bg-[#558B2F] text-white py-3 px-4 rounded-lg hover:bg-[#43731F] focus:outline-none focus:ring-2 focus:ring-[#558B2F] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg transition-colors"
             >
               {isLoading ? 'Signing in...' : 'Sign In'}
             </button>
@@ -242,13 +242,6 @@ const Login = () => {
             >
               Register as New Teacher
             </button>
-          </div>
-
-          {/* Admin note */}
-          <div className="mt-4 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-500 text-center">
-            School Admin or Country Admin?&nbsp;
-            <span className="font-medium text-gray-600">Contact your system administrator</span>
-            &nbsp;for account setup.
           </div>
 
           {/* Footer */}
