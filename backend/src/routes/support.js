@@ -5,10 +5,14 @@ import {
   getTicket,
   replyToTicket,
   updateTicketStatus,
+  publicContact,
 } from '../controllers/supportController.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// Public (unauthenticated) — must be before authenticate middleware
+router.post('/contact', publicContact);
 
 router.use(authenticate);
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { X, HelpCircle, MessageSquare, Ticket, ChevronDown, ChevronUp, Send, CheckCircle, AlertCircle, Clock, Loader2 } from 'lucide-react';
+import { X, HelpCircle, MessageSquare, Ticket, ChevronDown, ChevronUp, Send, CheckCircle, AlertCircle, Clock, Loader2, Mail } from 'lucide-react';
 import { useMyTickets, useCreateTicket, useTicket, useReplyToTicket } from '../hooks/useSupport';
+import { supportAPI } from '../api/support';
 import { useAuth } from '../contexts/AuthContext';
 import { format } from 'date-fns';
 
@@ -335,6 +336,109 @@ const MyTickets = () => {
   );
 };
 
+const PublicContactForm = () => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (message.trim().length < 10) { setError('Message must be at least 10 characters'); return; }
+    setLoading(true);
+    try {
+      await supportAPI.publicContact({ name: name.trim(), email: email.trim(), subject: subject.trim(), message: message.trim() });
+      setSent(true);
+    } catch (err) {
+      setError(err?.message || 'Failed to send message. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <div className="text-center py-8 space-y-3">
+        <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+          <CheckCircle size={26} className="text-green-600" />
+        </div>
+        <p className="font-semibold text-gray-800 text-lg">Message sent!</p>
+        <p className="text-sm text-gray-500">We'll reply to <span className="font-medium text-gray-700">{email}</span> within 1–2 business days.</p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <p className="text-sm text-gray-500">Can't log in? Send us a message and we'll get back to you by email.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            required
+            placeholder="Jane Smith"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Your Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+            placeholder="jane@school.edu"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+        <input
+          type="text"
+          value={subject}
+          onChange={e => setSubject(e.target.value)}
+          required
+          placeholder="e.g. Can't log in to my account"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+        <textarea
+          value={message}
+          onChange={e => setMessage(e.target.value)}
+          required
+          placeholder="Describe your issue in detail…"
+          rows={5}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+        />
+      </div>
+      {error && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">
+          <AlertCircle size={14} className="flex-shrink-0" />
+          {error}
+        </div>
+      )}
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {loading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+        {loading ? 'Sending…' : 'Send Message'}
+      </button>
+    </form>
+  );
+};
+
 // ── Main Modal ────────────────────────────────────────────────────────────────
 
 const TABS = [
@@ -343,10 +447,15 @@ const TABS = [
   { id: 'tickets', label: 'My Tickets', icon: Ticket },
 ];
 
+const PUBLIC_TABS = [
+  { id: 'faq', label: 'FAQs', icon: HelpCircle },
+  { id: 'contact-public', label: 'Contact Us', icon: Mail },
+];
+
 const HelpModal = ({ onClose, publicMode = false }) => {
   const [tab, setTab] = useState('faq');
 
-  const visibleTabs = publicMode ? TABS.filter(t => t.id === 'faq') : TABS;
+  const visibleTabs = publicMode ? PUBLIC_TABS : TABS;
   const switchToTickets = () => setTab('tickets');
 
   return (
@@ -361,52 +470,39 @@ const HelpModal = ({ onClose, publicMode = false }) => {
         <div className="flex items-center justify-between px-5 py-4 border-b flex-shrink-0">
           <div className="flex items-center gap-2">
             <HelpCircle size={18} className="text-indigo-600" />
-            <h2 id="help-modal-title" className="font-semibold text-gray-800">
-              {publicMode ? 'Frequently Asked Questions' : 'Help & Support'}
-            </h2>
+            <h2 id="help-modal-title" className="font-semibold text-gray-800">Help & Support</h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Close">
             <X size={18} />
           </button>
         </div>
 
-        {/* Tab bar — hidden in public mode (only one tab) */}
-        {!publicMode && (
-          <div className="flex border-b flex-shrink-0">
-            {visibleTabs.map(t => {
-              const Icon = t.icon;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 ${
-                    tab === t.id
-                      ? 'border-indigo-600 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <Icon size={14} />
-                  <span className="hidden sm:inline">{t.label}</span>
-                  <span className="sm:hidden">{t.id === 'faq' ? 'FAQs' : t.id === 'contact' ? 'Contact' : 'Tickets'}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {/* Tab bar */}
+        <div className="flex border-b flex-shrink-0">
+          {visibleTabs.map(t => {
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 ${
+                  tab === t.id
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Icon size={14} />
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-5">
-          {tab === 'faq' && (
-            <>
-              <FaqAccordion />
-              {publicMode && (
-                <p className="mt-5 text-center text-xs text-gray-400">
-                  Need more help? Log in and use the <span className="font-medium text-gray-500">Contact Support</span> tab to submit a ticket.
-                </p>
-              )}
-            </>
-          )}
+          {tab === 'faq' && <FaqAccordion />}
           {tab === 'contact' && <ContactForm onSuccess={switchToTickets} />}
+          {tab === 'contact-public' && <PublicContactForm />}
           {tab === 'tickets' && <MyTickets />}
         </div>
       </div>

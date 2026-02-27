@@ -1,5 +1,5 @@
 import prisma from '../utils/prisma.js';
-import { sendNewTicketNotification, sendTicketReplyNotification } from '../utils/email.js';
+import { sendNewTicketNotification, sendTicketReplyNotification, sendPublicContactEmail } from '../utils/email.js';
 
 const VALID_CATEGORIES = ['GENERAL_QUESTION', 'BUG_REPORT', 'ACCOUNT_ISSUE', 'FEATURE_REQUEST'];
 const VALID_STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED'];
@@ -219,6 +219,38 @@ export const updateTicketStatus = async (req, res, next) => {
     });
 
     res.status(200).json({ success: true, message: 'Status updated', data: updated });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /support/contact — unauthenticated contact form (for locked-out users)
+export const publicContact = async (req, res, next) => {
+  try {
+    const { name, email, subject, message } = req.body;
+
+    if (!name?.trim() || !email?.trim() || !subject?.trim() || !message?.trim()) {
+      return res.status(400).json({ success: false, message: 'name, email, subject, and message are required' });
+    }
+    // Basic email format check
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return res.status(400).json({ success: false, message: 'Invalid email address' });
+    }
+    if (message.trim().length < 10) {
+      return res.status(400).json({ success: false, message: 'Message must be at least 10 characters' });
+    }
+
+    const supportEmail = process.env.GMAIL_USER;
+    if (supportEmail) {
+      await sendPublicContactEmail(supportEmail, {
+        name: name.trim(),
+        email: email.trim(),
+        subject: subject.trim(),
+        message: message.trim(),
+      }).catch(err => console.error('Failed to send public contact email:', err));
+    }
+
+    res.status(200).json({ success: true, message: 'Message sent successfully' });
   } catch (error) {
     next(error);
   }

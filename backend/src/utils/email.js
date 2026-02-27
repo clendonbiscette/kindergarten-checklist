@@ -138,6 +138,37 @@ export async function sendNewTicketNotification(to, { submitterName, ticketId, s
   });
 }
 
+export async function sendPublicContactEmail(to, { name, email, subject, message }) {
+  return transporter.sendMail({
+    from: FROM,
+    to,
+    replyTo: email,
+    subject: `[Public Contact] ${subject}`,
+    text: `New message from the public contact form\n\nFrom: ${name} <${email}>\nSubject: ${subject}\n\nMessage:\n${message}\n\nNote: This was sent by an unauthenticated visitor (not logged in).\n\n— OHPC Kindergarten System`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+        <div style="background:#1E3A5F;padding:24px;border-radius:8px 8px 0 0;text-align:center">
+          <h1 style="color:#fff;margin:0;font-size:20px">OHPC Kindergarten Progress Checklist</h1>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:32px;border-radius:0 0 8px 8px">
+          <p style="margin:0 0 8px;color:#374151;font-weight:600;font-size:16px">Public Contact Form Submission</p>
+          <p style="margin:0 0 20px;color:#6b7280;font-size:13px">This message was sent by an unauthenticated visitor (not logged in).</p>
+          <table style="width:100%;border-collapse:collapse;margin:0 0 24px">
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:14px;width:80px">From</td><td style="padding:6px 0;color:#111827;font-size:14px">${name} &lt;${email}&gt;</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:14px">Subject</td><td style="padding:6px 0;color:#111827;font-size:14px;font-weight:600">${subject}</td></tr>
+          </table>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px">
+            <p style="margin:0;color:#374151;font-size:14px;line-height:1.6;white-space:pre-wrap">${message}</p>
+          </div>
+          <p style="margin:20px 0 0;color:#9ca3af;font-size:13px">
+            Reply directly to this email to respond to ${name}.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+}
+
 export async function sendTicketReplyNotification(to, { firstName, ticketSubject, replyMessage }) {
   const loginUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   return transporter.sendMail({

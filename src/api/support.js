@@ -6,4 +6,5 @@ export const supportAPI = {
   getTicket: (id) => apiClient.get(`/support/tickets/${id}`),
   replyToTicket: (id, message) => apiClient.post(`/support/tickets/${id}/reply`, { message }),
   updateStatus: (id, status) => apiClient.patch(`/support/tickets/${id}/status`, { status }),
+  publicContact: (data) => apiClient.post('/support/contact', data),
 };
