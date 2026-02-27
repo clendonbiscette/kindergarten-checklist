@@ -143,6 +143,12 @@ const DesktopAssessmentApp = () => {
   // Track which outcome IDs are currently being saved to prevent double-submit
   const [savingOutcomeIds, setSavingOutcomeIds] = useState(new Set());
 
+  // "By Outcome" mode: tracks saving state per `${outcomeId}_${studentId}` key
+  const [savingByOutcomeKeys, setSavingByOutcomeKeys] = useState(new Set());
+
+  // Assessment mode: 'by-student' (current) | 'by-outcome' (new class-wide view)
+  const [assessmentMode, setAssessmentMode] = useState('by-student');
+
   // Brief green highlight after a successful save (assessment card animation)
   const [recentlySavedIds, setRecentlySavedIds] = useState(new Set());
 
@@ -553,71 +559,99 @@ const DesktopAssessmentApp = () => {
     return map;
   }, [subjects, allOutcomes, termRatingMap, selectedStudent, selectedTerm]);
 
+  // "By Outcome" mode — { [outcomeId]: { [studentId]: rating } } from all term assessments
+  const termRatingByStudentMap = useMemo(() => {
+    const map = {};
+    (termAssessments || []).forEach(a => {
+      if (!map[a.learningOutcomeId]) map[a.learningOutcomeId] = {};
+      map[a.learningOutcomeId][a.studentId] = a.rating;
+    });
+    return map;
+  }, [termAssessments]);
+
+  // Flag students where ≥40% of their rated outcomes (min 3) are NEEDS_PRACTICE
+  const strugglingStudents = useMemo(() => {
+    if (!selectedTerm || !termAssessments.length) return new Set();
+    const byStudent = {};
+    termAssessments.forEach(a => {
+      if (!byStudent[a.studentId]) byStudent[a.studentId] = { total: 0, needs: 0 };
+      byStudent[a.studentId].total++;
+      if (a.rating === 'NEEDS_PRACTICE') byStudent[a.studentId].needs++;
+    });
+    const flagged = new Set();
+    Object.entries(byStudent).forEach(([id, { total, needs }]) => {
+      if (total >= 3 && needs / total >= 0.4) flagged.add(id);
+    });
+    return flagged;
+  }, [termAssessments, selectedTerm]);
+
   // ratingOverride lets rating buttons pass the value directly (React state batching means
   // tempAssessments won't have updated yet by the time handleSaveAssessment is called)
-  const handleSaveAssessment = async (outcome, ratingOverride = null) => {
+  // studentIdOverride is used by "By Outcome" mode to save for a specific student
+  // without requiring that student to be selected in the sidebar.
+  const handleSaveAssessment = async (outcome, ratingOverride = null, studentIdOverride = null) => {
     const rating = ratingOverride ?? tempAssessments[outcome.id];
-    const comment = tempComments[outcome.id] || '';
+    const comment = studentIdOverride ? '' : (tempComments[outcome.id] || '');
+    const studentId = studentIdOverride ?? selectedStudent;
+    const saveKey = studentIdOverride ? `${outcome.id}_${studentId}` : outcome.id;
 
     if (!rating) return;
-    if (!selectedTerm) {
-      toast.warning('Please select a term first');
-      return;
+    if (!selectedTerm) { toast.warning('Please select a term first'); return; }
+    if (!studentId) { toast.warning('Please select a student first'); return; }
+
+    // Prevent double-submit
+    if (studentIdOverride) {
+      if (savingByOutcomeKeys.has(saveKey)) return;
+      setSavingByOutcomeKeys(prev => new Set(prev).add(saveKey));
+    } else {
+      if (savingOutcomeIds.has(outcome.id)) return;
+      setSavingOutcomeIds(prev => new Set(prev).add(outcome.id));
     }
 
-    // Prevent double-submit for the same outcome
-    if (savingOutcomeIds.has(outcome.id)) return;
-    setSavingOutcomeIds(prev => new Set(prev).add(outcome.id));
-
-    const payload = {
-      studentId: selectedStudent,
-      learningOutcomeId: outcome.id,
-      termId: selectedTerm,
-      assessmentDate: selectedDate,
-      rating: rating,
-      comment,
-    };
+    const payload = { studentId, learningOutcomeId: outcome.id, termId: selectedTerm, assessmentDate: selectedDate, rating, comment };
 
     try {
       await createAssessment.mutateAsync(payload);
 
-      const newTemp = { ...tempAssessments };
-      delete newTemp[outcome.id];
-      setTempAssessments(newTemp);
-      // Clear the draft once all pending assessments have been saved
-      if (Object.keys(newTemp).length === 0) {
-        localStorage.removeItem('ohpc_draft_assessments');
-        setDraftBanner(null);
-      }
-
-      const newComments = { ...tempComments };
-      delete newComments[outcome.id];
-      setTempComments(newComments);
-
-      // Trigger save animation on the card
-      setRecentlySavedIds(prev => new Set(prev).add(outcome.id));
-      setTimeout(() => setRecentlySavedIds(prev => { const next = new Set(prev); next.delete(outcome.id); return next; }), 1500);
-
-      toast.success('Assessment saved successfully');
-    } catch (error) {
-      // If offline, queue for later sync instead of showing an error
-      if (!navigator.onLine) {
-        const count = offlineQueue.add(payload);
-        setQueueCount(count);
-
+      if (!studentIdOverride) {
+        // By-student mode: clear temp state and show animation
         const newTemp = { ...tempAssessments };
         delete newTemp[outcome.id];
         setTempAssessments(newTemp);
+        if (Object.keys(newTemp).length === 0) {
+          localStorage.removeItem('ohpc_draft_assessments');
+          setDraftBanner(null);
+        }
         const newComments = { ...tempComments };
         delete newComments[outcome.id];
         setTempComments(newComments);
-
+        setRecentlySavedIds(prev => new Set(prev).add(outcome.id));
+        setTimeout(() => setRecentlySavedIds(prev => { const next = new Set(prev); next.delete(outcome.id); return next; }), 1500);
+        toast.success('Assessment saved');
+      }
+      // By-outcome mode: no toast per save (too noisy when rating a whole class row)
+    } catch (error) {
+      if (!navigator.onLine) {
+        const count = offlineQueue.add(payload);
+        setQueueCount(count);
+        if (!studentIdOverride) {
+          const newTemp = { ...tempAssessments };
+          delete newTemp[outcome.id];
+          setTempAssessments(newTemp);
+          const newComments = { ...tempComments };
+          delete newComments[outcome.id];
+          setTempComments(newComments);
+        }
         toast.warning(`Offline — assessment queued (${count} pending). Will sync when reconnected.`);
       } else {
-        toast.error('Failed to save assessment: ' + (error.message || 'Unknown error'));
+        toast.error('Failed to save: ' + (error.message || 'Unknown error'));
       }
     } finally {
-      setSavingOutcomeIds(prev => { const next = new Set(prev); next.delete(outcome.id); return next; });
+      if (studentIdOverride) {
+        setSavingByOutcomeKeys(prev => { const next = new Set(prev); next.delete(saveKey); return next; });
+      } else {
+        setSavingOutcomeIds(prev => { const next = new Set(prev); next.delete(outcome.id); return next; });
+      }
     }
   };
 
@@ -850,6 +884,28 @@ const DesktopAssessmentApp = () => {
     );
   };
 
+  // Mode toggle — rendered at the top of both by-student and by-outcome views
+  const renderModeToggle = () => (
+    <div className="flex rounded-md border border-gray-200 overflow-hidden self-start text-xs font-medium">
+      <button
+        type="button"
+        onClick={() => setAssessmentMode('by-student')}
+        className={`px-3 py-1.5 transition-colors ${assessmentMode === 'by-student' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+        title="Assess one student across all outcomes"
+      >
+        By Student
+      </button>
+      <button
+        type="button"
+        onClick={() => setAssessmentMode('by-outcome')}
+        className={`px-3 py-1.5 transition-colors border-l border-gray-200 ${assessmentMode === 'by-outcome' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+        title="Assess all students on one outcome at a time"
+      >
+        By Outcome
+      </button>
+    </div>
+  );
+
   // Render views (simplified versions - you can expand these)
   const renderDataEntry = () => {
     if (!selectedTerm) {
@@ -864,6 +920,137 @@ const DesktopAssessmentApp = () => {
       );
     }
 
+    // ── BY OUTCOME MODE ────────────────────────────────────────────────────────
+    if (assessmentMode === 'by-outcome') {
+      if (!selectedSubject) {
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">{renderModeToggle()}</div>
+            <div className="flex items-center justify-center h-48 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+              <div className="text-center">
+                <BookOpen className="mx-auto text-gray-400 mb-2" size={32} />
+                <p className="text-gray-600 font-medium text-sm">Select a subject in the sidebar to begin</p>
+                <p className="text-xs text-gray-500 mt-1">You'll see every outcome with rating buttons for each student</p>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const ratingButtons = (outcome, student) => {
+        const saveKey = `${outcome.id}_${student.id}`;
+        const isSaving = savingByOutcomeKeys.has(saveKey);
+        const savedRating = termRatingByStudentMap[outcome.id]?.[student.id];
+        return [
+          { symbol: '+', rating: 'EASILY_MEETING', label: 'Easily Meeting' },
+          { symbol: '=', rating: 'MEETING', label: 'Meeting' },
+          { symbol: 'x', rating: 'NEEDS_PRACTICE', label: 'Needs Practice' },
+        ].map(({ symbol, rating, label }) => (
+          <button
+            key={symbol}
+            type="button"
+            onClick={() => handleSaveAssessment(outcome, rating, student.id)}
+            aria-label={`${label} for ${student.firstName} ${student.lastName}`}
+            aria-pressed={savedRating === rating}
+            disabled={isSaving}
+            className={`w-9 h-9 rounded font-bold text-base transition-all ${
+              savedRating === rating
+                ? symbol === '+' ? 'bg-green-500 text-white ring-2 ring-green-600'
+                  : symbol === '=' ? 'bg-blue-500 text-white ring-2 ring-blue-600'
+                  : 'bg-amber-500 text-white ring-2 ring-amber-600'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            } disabled:opacity-50`}
+          >
+            {isSaving ? '…' : symbol}
+          </button>
+        ));
+      };
+
+      return (
+        <div className="space-y-3">
+          {/* Toolbar */}
+          <div className="flex flex-col sm:flex-row gap-3 bg-white p-3 rounded-lg shadow-sm flex-wrap">
+            {renderModeToggle()}
+            <div className="flex-1 relative min-w-[180px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                placeholder="Search outcomes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-md text-sm focus:border-gray-300"
+              />
+            </div>
+            <select
+              value={selectedStrand}
+              onChange={(e) => setSelectedStrand(e.target.value)}
+              className="px-3 py-2 border border-gray-200 rounded-md text-sm focus:border-gray-300"
+            >
+              {currentStrands.map(s => <option key={s} value={s}>{s === 'all' ? 'All Strands' : s}</option>)}
+            </select>
+          </div>
+
+          {/* Rating guide */}
+          <div className="flex flex-wrap items-center gap-3 text-xs bg-gray-50 rounded-lg px-4 py-2.5 border border-gray-200">
+            <span className="font-medium text-gray-600 shrink-0">Rating guide:</span>
+            <span className="flex items-center gap-1.5 text-gray-600"><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded font-bold text-green-700 font-mono">+</kbd> Easily Meeting</span>
+            <span className="flex items-center gap-1.5 text-gray-600"><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded font-bold text-blue-700 font-mono">=</kbd> Meeting</span>
+            <span className="flex items-center gap-1.5 text-gray-600"><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded font-bold text-red-600 font-mono">x</kbd> Needs Practice</span>
+            {accessibleStudents.length > 0 && (
+              <span className="ml-auto text-gray-500">{accessibleStudents.length} students</span>
+            )}
+          </div>
+
+          {/* Outcome rows */}
+          <div className="space-y-3">
+            {displayedOutcomes.map(outcome => {
+              const studentRatings = termRatingByStudentMap[outcome.id] || {};
+              const ratedCount = accessibleStudents.filter(s => studentRatings[s.id]).length;
+              const allDone = ratedCount === accessibleStudents.length;
+              return (
+                <div key={outcome.id} className={`bg-white shadow-sm rounded-lg p-4 ${allDone ? 'border-l-4 border-l-green-400' : ''}`}>
+                  {/* Outcome header */}
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs font-semibold px-2 py-1 bg-gray-100 rounded">{outcome.code}</span>
+                      <span className="text-xs text-gray-500">{outcome.strand.name}</span>
+                    </div>
+                    <span className={`text-xs font-medium whitespace-nowrap ${allDone ? 'text-green-600' : 'text-gray-400'}`}>
+                      {ratedCount}/{accessibleStudents.length} rated
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700 mb-3 leading-snug">{outcome.description}</p>
+
+                  {/* Student rows */}
+                  <div className="divide-y divide-gray-100">
+                    {accessibleStudents.map(student => {
+                      const savedRating = studentRatings[student.id];
+                      const borderClass = savedRating === 'EASILY_MEETING' ? 'border-l-4 border-l-green-400'
+                        : savedRating === 'MEETING' ? 'border-l-4 border-l-blue-400'
+                        : savedRating === 'NEEDS_PRACTICE' ? 'border-l-4 border-l-amber-400'
+                        : 'border-l-4 border-l-gray-100';
+                      return (
+                        <div key={student.id} className={`flex items-center gap-3 py-2 pl-2 ${borderClass}`}>
+                          <span className={`text-sm flex-1 min-w-0 truncate ${strugglingStudents.has(student.id) ? 'text-amber-700 font-medium' : 'text-gray-700'}`}>
+                            {student.firstName} {student.lastName}
+                            {strugglingStudents.has(student.id) && <span className="ml-1 text-amber-500" title="Needs attention — many Needs Practice ratings this term">⚠</span>}
+                          </span>
+                          <div className="flex gap-1.5 flex-shrink-0">
+                            {ratingButtons(outcome, student)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // ── BY STUDENT MODE ────────────────────────────────────────────────────────
     if (!selectedStudent || !selectedSubject) {
       // If the class has no students yet, show a helpful empty state with instructions
       if (students.length === 0) {
@@ -974,11 +1161,32 @@ const DesktopAssessmentApp = () => {
             </div>
           )}
 
+          {/* Students needing attention */}
+          {strugglingStudents.size > 0 && (
+            <div className="bg-amber-50 border border-amber-300 rounded-lg p-4">
+              <h3 className="font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                <span>⚠</span> Students Needing Attention ({strugglingStudents.size})
+              </h3>
+              <p className="text-xs text-amber-700 mb-2">40%+ of rated outcomes are Needs Practice this term</p>
+              <div className="flex flex-wrap gap-2">
+                {accessibleStudents.filter(s => strugglingStudents.has(s.id)).map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedStudent(s.id)}
+                    className="px-2.5 py-1 bg-white border border-amber-300 rounded text-sm text-amber-800 hover:bg-amber-100 transition-colors"
+                  >
+                    {s.firstName} {s.lastName}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Call to action */}
           <div className="flex items-center justify-center h-32 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
             <div className="text-center">
-              <p className="text-gray-600 font-medium">Select a student and subject to begin assessment</p>
-              <p className="text-sm text-gray-500 mt-1">Use the sidebar to choose who you want to assess</p>
+              <p className="text-gray-600 font-medium">Select a student and subject to begin — or switch to By Outcome</p>
+              <p className="text-sm text-gray-500 mt-1">Use the sidebar to choose a student, or use By Outcome to rate the whole class at once</p>
             </div>
           </div>
         </div>
@@ -987,9 +1195,39 @@ const DesktopAssessmentApp = () => {
 
     return (
       <div className="space-y-3">
+        {/* Student name header — prominent, as requested */}
+        {selectedStudentObj && (
+          <div className="flex items-center gap-4 bg-white rounded-lg px-4 py-3 shadow-sm border-l-4 border-l-indigo-500">
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Assessing</p>
+              <p className="text-xl font-bold text-gray-900 leading-tight truncate">
+                {selectedStudentObj.firstName} {selectedStudentObj.lastName}
+                {strugglingStudents.has(selectedStudent) && (
+                  <span className="ml-2 text-sm font-normal text-amber-600" title="More than 40% of rated outcomes are Needs Practice this term">⚠ Needs attention</span>
+                )}
+              </p>
+            </div>
+            {/* Progress for current subject */}
+            {selectedSubject && subjectCompletionMap[selectedSubject] && subjectCompletionMap[selectedSubject].total > 0 && (() => {
+              const { rated, total } = subjectCompletionMap[selectedSubject];
+              const pct = Math.round((rated / total) * 100);
+              return (
+                <div className="text-right flex-shrink-0">
+                  <p className="text-xs text-gray-500">This subject</p>
+                  <p className="text-sm font-bold text-indigo-700">{rated}/{total} rated</p>
+                  <div className="mt-1 h-2 w-28 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row gap-3 bg-white p-3 rounded-lg shadow-sm">
-          <div className="flex-1 relative">
+        <div className="flex flex-col sm:flex-row gap-3 bg-white p-3 rounded-lg shadow-sm flex-wrap">
+          {renderModeToggle()}
+          <div className="flex-1 relative min-w-[180px]">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
@@ -2026,7 +2264,7 @@ const DesktopAssessmentApp = () => {
                         const groupLabel = cls ? `${cls.name} (${cls.gradeLevel})` : 'Unassigned';
                         return (
                           <optgroup key={classId} label={groupLabel}>
-                            {classStudents.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                            {classStudents.map(s => <option key={s.id} value={s.id}>{strugglingStudents.has(s.id) ? `⚠ ${s.firstName} ${s.lastName}` : `${s.firstName} ${s.lastName}`}</option>)}
                           </optgroup>
                         );
                       })}
@@ -2080,7 +2318,7 @@ const DesktopAssessmentApp = () => {
                         const groupLabel = cls ? `${cls.name} (${cls.gradeLevel})` : 'Unassigned';
                         return (
                           <optgroup key={classId} label={groupLabel}>
-                            {classStudents.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                            {classStudents.map(s => <option key={s.id} value={s.id}>{strugglingStudents.has(s.id) ? `⚠ ${s.firstName} ${s.lastName}` : `${s.firstName} ${s.lastName}`}</option>)}
                           </optgroup>
                         );
                       })}
