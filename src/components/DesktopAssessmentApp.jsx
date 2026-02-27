@@ -36,6 +36,7 @@ import TeacherWelcome from './TeacherWelcome';
 import ChangePasswordModal from './ChangePasswordModal';
 import UserProfileModal from './UserProfileModal';
 import HelpModal from './HelpModal';
+import { useMyTickets } from '../hooks/useSupport';
 import AppFooter from './AppFooter';
 import CommandPalette from './CommandPalette';
 import { saveSession, getSession } from '../utils/sessionStorage';
@@ -136,6 +137,25 @@ const DesktopAssessmentApp = () => {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+
+  // Unread ticket notifications
+  const HELP_LS_KEY = `ohpc-help-last-opened-${user?.userId}`;
+  const [helpLastOpened, setHelpLastOpened] = useState(() => {
+    const stored = localStorage.getItem(`ohpc-help-last-opened-${user?.userId}`);
+    return stored ? new Date(stored) : new Date(0);
+  });
+  const { data: myTickets = [] } = useMyTickets();
+  const hasUnreadTickets = myTickets.some(t =>
+    new Date(t.updatedAt) > new Date(t.createdAt) &&
+    new Date(t.updatedAt) > helpLastOpened
+  );
+  const handleOpenHelp = () => {
+    const now = new Date();
+    localStorage.setItem(HELP_LS_KEY, now.toISOString());
+    setHelpLastOpened(now);
+    setShowHelp(true);
+  };
+
   const [showCreateTermModal, setShowCreateTermModal] = useState(false);
   const [createTermForm, setCreateTermForm] = useState({ name: '', schoolYear: '', startDate: '', endDate: '' });
   const [createTermError, setCreateTermError] = useState('');
@@ -2107,11 +2127,16 @@ const DesktopAssessmentApp = () => {
             <span className="text-slate-400">⌘K</span>
           </button>
           <button
-            onClick={() => setShowHelp(true)}
+            onClick={handleOpenHelp}
             className="flex items-center gap-1 px-3 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-xs sm:text-sm transition-colors"
-            title="Help & Support"
+            title={hasUnreadTickets ? 'Help & Support — new reply!' : 'Help & Support'}
           >
-            <HelpCircle size={16} />
+            <div className="relative">
+              <HelpCircle size={16} />
+              {hasUnreadTickets && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+              )}
+            </div>
             <span className="hidden sm:inline">Help</span>
           </button>
           <button
