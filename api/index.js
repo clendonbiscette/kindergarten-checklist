@@ -11,6 +11,7 @@ import classRoutes from '../backend/src/routes/classes.js';
 import adminRoutes from '../backend/src/routes/admin.js';
 import termRoutes from '../backend/src/routes/terms.js';
 import reportRoutes from '../backend/src/routes/reports.js';
+import supportRoutes from '../backend/src/routes/support.js';
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({ dsn: process.env.SENTRY_DSN });
@@ -58,6 +59,7 @@ app.use('/api/classes', classRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/terms', termRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/support', supportRoutes);
 
 // 404 handler for API routes (Express 5 requires named parameter)
 app.use('/api/{*splat}', (req, res) => {

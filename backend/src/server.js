@@ -13,6 +13,7 @@ import classRoutes from './routes/classes.js';
 import adminRoutes from './routes/admin.js';
 import termRoutes from './routes/terms.js';
 import reportRoutes from './routes/reports.js';
+import supportRoutes from './routes/support.js';
 
 // Init Sentry before registering routes (captures unhandled errors)
 if (process.env.SENTRY_DSN) {
@@ -49,6 +50,7 @@ app.use('/api/classes', classRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/terms', termRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/support', supportRoutes);
 
 // 404 handler
 app.use(notFound);

@@ -4,7 +4,7 @@ import {
   Home, FileText, BarChart3, User, School, Calendar,
   BookOpen, Users, TrendingUp, CheckCircle2, PlusCircle,
   UserPlus, GraduationCap, Edit2, Trash2, Upload, Key,
-  Moon, Sun
+  Moon, Sun, HelpCircle
 } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
@@ -35,6 +35,7 @@ import AssessmentEditModal from './AssessmentEditModal';
 import TeacherWelcome from './TeacherWelcome';
 import ChangePasswordModal from './ChangePasswordModal';
 import UserProfileModal from './UserProfileModal';
+import HelpModal from './HelpModal';
 import AppFooter from './AppFooter';
 import CommandPalette from './CommandPalette';
 import { saveSession, getSession } from '../utils/sessionStorage';
@@ -134,6 +135,7 @@ const DesktopAssessmentApp = () => {
 
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [showCreateTermModal, setShowCreateTermModal] = useState(false);
   const [createTermForm, setCreateTermForm] = useState({ name: '', schoolYear: '', startDate: '', endDate: '' });
   const [createTermError, setCreateTermError] = useState('');
@@ -2105,6 +2107,14 @@ const DesktopAssessmentApp = () => {
             <span className="text-slate-400">⌘K</span>
           </button>
           <button
+            onClick={() => setShowHelp(true)}
+            className="flex items-center gap-1 px-3 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-xs sm:text-sm transition-colors"
+            title="Help & Support"
+          >
+            <HelpCircle size={16} />
+            <span className="hidden sm:inline">Help</span>
+          </button>
+          <button
             onClick={() => setShowChangePassword(true)}
             className="flex items-center gap-1 px-3 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-xs sm:text-sm transition-colors"
             title="Change Password"
@@ -2742,6 +2752,8 @@ const DesktopAssessmentApp = () => {
           onChangePassword={() => { setShowProfile(false); setShowChangePassword(true); }}
         />
       )}
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
       {/* Create Term Modal */}
       {showCreateTermModal && (

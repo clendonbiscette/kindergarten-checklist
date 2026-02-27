@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   Users, School, BarChart3, LogOut, Search, Plus,
   Edit2, Key, UserX, ChevronDown, ChevronUp, X,
-  Shield, UserCheck, Building, Globe, RefreshCw, BookOpen, Upload, Calendar
+  Shield, UserCheck, Building, Globe, RefreshCw, BookOpen, Upload, Calendar,
+  HelpCircle, Send, Loader2, MessageSquare, Clock
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -18,6 +19,7 @@ import {
   useAssignUserToSchool,
   useCreateSchool,
 } from '../hooks/useAdmin';
+import { useAllTickets, useTicket, useReplyToTicket, useUpdateTicketStatus } from '../hooks/useSupport';
 import ConfirmModal from './ConfirmModal';
 import ChangePasswordModal from './ChangePasswordModal';
 import AppFooter from './AppFooter';
@@ -716,12 +718,213 @@ const SuperuserDashboard = () => {
     );
   };
 
+  const SupportTicketThread = ({ ticketId, onBack }) => {
+    const { data: ticket, isLoading } = useTicket(ticketId);
+    const { mutateAsync: updateStatus, isPending: updatingStatus } = useUpdateTicketStatus();
+    const { mutateAsync: sendReply, isPending: sendingReply } = useReplyToTicket(ticketId);
+    const [replyText, setReplyText] = useState('');
+
+    const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'RESOLVED'];
+    const STATUS_LABELS = { OPEN: 'Open', IN_PROGRESS: 'In Progress', RESOLVED: 'Resolved' };
+    const STATUS_COLORS = { OPEN: 'bg-gray-100 text-gray-600', IN_PROGRESS: 'bg-blue-100 text-blue-700', RESOLVED: 'bg-green-100 text-green-700' };
+    const CATEGORY_LABELS = { GENERAL_QUESTION: 'General Question', BUG_REPORT: 'Bug Report', ACCOUNT_ISSUE: 'Account / Login', FEATURE_REQUEST: 'Feature Request' };
+    const CATEGORY_COLORS = { GENERAL_QUESTION: 'bg-blue-100 text-blue-700', BUG_REPORT: 'bg-red-100 text-red-700', ACCOUNT_ISSUE: 'bg-amber-100 text-amber-700', FEATURE_REQUEST: 'bg-purple-100 text-purple-700' };
+
+    if (isLoading) return <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-gray-400" /></div>;
+    if (!ticket) return null;
+
+    const handleReply = async () => {
+      if (!replyText.trim()) return;
+      await sendReply(replyText.trim());
+      setReplyText('');
+    };
+
+    return (
+      <div className="bg-white rounded-xl shadow-sm border p-6 space-y-4">
+        <button onClick={onBack} className="text-sm text-purple-600 hover:text-purple-800 font-medium">← Back to tickets</button>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800">{ticket.subject}</h3>
+            <p className="text-sm text-gray-500 mt-0.5">{ticket.user?.firstName} {ticket.user?.lastName} · {ticket.user?.email}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[ticket.category]}`}>{CATEGORY_LABELS[ticket.category]}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">Status:</span>
+            <select
+              value={ticket.status}
+              onChange={e => updateStatus({ id: ticketId, status: e.target.value })}
+              disabled={updatingStatus}
+              className={`text-sm px-3 py-1.5 rounded-lg border font-medium focus:outline-none focus:ring-2 focus:ring-purple-400 ${STATUS_COLORS[ticket.status]}`}
+            >
+              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex gap-3">
+            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-indigo-700">
+              {ticket.user?.firstName?.[0]}{ticket.user?.lastName?.[0]}
+            </div>
+            <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
+              <p className="text-xs text-gray-500 mb-1">{ticket.user?.firstName} {ticket.user?.lastName} · {new Date(ticket.createdAt).toLocaleString()}</p>
+              <p className="text-sm text-gray-800 whitespace-pre-wrap">{ticket.message}</p>
+            </div>
+          </div>
+          {ticket.replies?.map(r => (
+            <div key={r.id} className={`flex gap-3 ${r.isStaff ? 'flex-row-reverse' : ''}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${r.isStaff ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                {r.isStaff ? 'SU' : `${r.user?.firstName?.[0]}${r.user?.lastName?.[0]}`}
+              </div>
+              <div className={`flex-1 border rounded-lg px-3 py-2.5 ${r.isStaff ? 'bg-purple-50 border-purple-200' : 'bg-gray-50 border-gray-200'}`}>
+                <p className="text-xs text-gray-500 mb-1">{r.isStaff ? 'Support Team (You)' : `${r.user?.firstName} ${r.user?.lastName}`} · {new Date(r.createdAt).toLocaleString()}</p>
+                <p className="text-sm text-gray-800 whitespace-pre-wrap">{r.message}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="border-t pt-4 space-y-2">
+          <textarea
+            value={replyText}
+            onChange={e => setReplyText(e.target.value)}
+            placeholder="Write a reply to the teacher…"
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
+          />
+          <button
+            onClick={handleReply}
+            disabled={sendingReply || !replyText.trim()}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {sendingReply ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            {sendingReply ? 'Sending…' : 'Send Reply'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSupport = () => {
+    const [statusFilter, setStatusFilter] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('');
+    const [search, setSearch] = useState('');
+    const [openTicketId, setOpenTicketId] = useState(null);
+
+    const { data, isLoading } = useAllTickets({
+      ...(statusFilter && { status: statusFilter }),
+      ...(categoryFilter && { category: categoryFilter }),
+      ...(search && { search }),
+    });
+
+    const tickets = data?.tickets || [];
+    const STATUS_COLORS = { OPEN: 'bg-gray-100 text-gray-600', IN_PROGRESS: 'bg-blue-100 text-blue-700', RESOLVED: 'bg-green-100 text-green-700' };
+    const STATUS_LABELS = { OPEN: 'Open', IN_PROGRESS: 'In Progress', RESOLVED: 'Resolved' };
+    const CATEGORY_LABELS = { GENERAL_QUESTION: 'General Question', BUG_REPORT: 'Bug Report', ACCOUNT_ISSUE: 'Account / Login', FEATURE_REQUEST: 'Feature Request' };
+    const CATEGORY_COLORS = { GENERAL_QUESTION: 'bg-blue-100 text-blue-700', BUG_REPORT: 'bg-red-100 text-red-700', ACCOUNT_ISSUE: 'bg-amber-100 text-amber-700', FEATURE_REQUEST: 'bg-purple-100 text-purple-700' };
+
+    if (openTicketId) {
+      return <SupportTicketThread ticketId={openTicketId} onBack={() => setOpenTicketId(null)} />;
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><HelpCircle size={20} className="text-purple-600" /> Support Tickets</h2>
+          {data && <p className="text-sm text-gray-500">{data.total} total</p>}
+        </div>
+
+        {/* Filters */}
+        <div className="flex gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-48">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by subject or name…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+            />
+          </div>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
+            <option value="">All Statuses</option>
+            <option value="OPEN">Open</option>
+            <option value="IN_PROGRESS">In Progress</option>
+            <option value="RESOLVED">Resolved</option>
+          </select>
+          <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
+            <option value="">All Categories</option>
+            <option value="GENERAL_QUESTION">General Question</option>
+            <option value="BUG_REPORT">Bug Report</option>
+            <option value="ACCOUNT_ISSUE">Account / Login</option>
+            <option value="FEATURE_REQUEST">Feature Request</option>
+          </select>
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
+        ) : tickets.length === 0 ? (
+          <div className="text-center py-16 bg-white rounded-xl border">
+            <MessageSquare size={36} className="mx-auto text-gray-300 mb-3" />
+            <p className="text-gray-500">No tickets found</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Ticket</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell">From</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Category</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Updated</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Replies</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {tickets.map(ticket => (
+                  <tr
+                    key={ticket.id}
+                    onClick={() => setOpenTicketId(ticket.id)}
+                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-medium text-gray-800 truncate max-w-48">{ticket.subject}</p>
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      <p className="text-sm text-gray-600">{ticket.user?.firstName} {ticket.user?.lastName}</p>
+                      <p className="text-xs text-gray-400">{ticket.user?.email}</p>
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[ticket.category]}`}>{CATEGORY_LABELS[ticket.category]}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[ticket.status]}`}>{STATUS_LABELS[ticket.status]}</span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell">
+                      <Clock size={11} className="inline mr-1" />
+                      {new Date(ticket.updatedAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500">{ticket.replies?.length || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const navItems = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'schools', label: 'Schools', icon: School },
     { id: 'students', label: 'Students', icon: BookOpen },
     { id: 'terms', label: 'Terms', icon: Calendar },
+    { id: 'support', label: 'Support', icon: HelpCircle },
   ];
 
   return (
@@ -791,6 +994,7 @@ const SuperuserDashboard = () => {
         {currentView === 'schools' && renderSchools()}
         {currentView === 'students' && renderStudents()}
         {currentView === 'terms' && renderTerms()}
+        {currentView === 'support' && renderSupport()}
       </div>
 
       {/* Create User Modal */}

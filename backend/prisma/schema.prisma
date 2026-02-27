@@ -29,6 +29,8 @@ model User {
   classes              Class[]
   studentParents       StudentParent[]
   assignments          UserAssignment[]
+  supportTickets       SupportTicket[]
+  ticketReplies        TicketReply[]
 
   @@index([role])
   @@index([isActive])
@@ -235,6 +237,50 @@ enum AssessmentRating {
   EASILY_MEETING
   MEETING
   NEEDS_PRACTICE
+}
+
+enum TicketCategory {
+  GENERAL_QUESTION
+  BUG_REPORT
+  ACCOUNT_ISSUE
+  FEATURE_REQUEST
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+model SupportTicket {
+  id        String         @id @default(uuid())
+  userId    String         @map("user_id")
+  subject   String
+  category  TicketCategory
+  message   String
+  status    TicketStatus   @default(OPEN)
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+  user      User           @relation(fields: [userId], references: [id])
+  replies   TicketReply[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("support_tickets")
+}
+
+model TicketReply {
+  id        String        @id @default(uuid())
+  ticketId  String        @map("ticket_id")
+  userId    String        @map("user_id")
+  message   String
+  isStaff   Boolean       @default(false) @map("is_staff")
+  createdAt DateTime      @default(now()) @map("created_at")
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_replies")
 }
 
 model AuditLog {
