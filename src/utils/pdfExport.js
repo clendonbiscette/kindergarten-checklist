@@ -36,10 +36,10 @@ const drawBanner = (doc, subtitle, pageWidth) => {
   doc.setFillColor(...C.navy);
   doc.rect(0, 0, pageWidth, 24, 'F');
   doc.setTextColor(...C.white);
-  doc.setFont(undefined, 'bold');
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.text('OECS Kindergarten Progress Checklist', pageWidth / 2, 10, { align: 'center' });
-  doc.setFont(undefined, 'normal');
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.text(subtitle, pageWidth / 2, 18, { align: 'center' });
   doc.setTextColor(...C.gray900);
@@ -56,18 +56,18 @@ const drawInfoBlock = (doc, leftItems, rightItems, startY, pageWidth, margin) =>
     const l = leftItems[i];
     const r = rightItems[i];
     if (l) {
-      doc.setFont(undefined, 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.setTextColor(...C.gray500);
       doc.text(l.label + ':', margin, y);
-      doc.setFont(undefined, 'normal');
+      doc.setFont('helvetica', 'normal');
       doc.setTextColor(...C.gray900);
       doc.text(String(l.value ?? 'N/A'), margin + 24, y);
     }
     if (r) {
-      doc.setFont(undefined, 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.setTextColor(...C.gray500);
       doc.text(r.label + ':', midX, y);
-      doc.setFont(undefined, 'normal');
+      doc.setFont('helvetica', 'normal');
       doc.setTextColor(...C.gray900);
       doc.text(String(r.value ?? 'N/A'), midX + 24, y);
     }
@@ -90,10 +90,10 @@ const drawSummaryBoxes = (doc, boxes, startY, pageWidth, margin) => {
     doc.setLineWidth(0.25);
     doc.roundedRect(x, startY, boxW, boxH, 2, 2, 'S');
     doc.setTextColor(...textColor);
-    doc.setFont(undefined, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.text(String(value), x + boxW / 2, startY + 10.5, { align: 'center' });
-    doc.setFont(undefined, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.5);
     doc.text(label, x + boxW / 2, startY + 16, { align: 'center' });
     x += boxW + gap;
@@ -106,14 +106,14 @@ const drawSummaryBoxes = (doc, boxes, startY, pageWidth, margin) => {
 
 /** Add branded footer to every page of the document. */
 const addFooters = (doc, pageWidth, teacherName) => {
-  const total   = doc.internal.getNumberOfPages();
+  const total   = doc.getNumberOfPages();
   const genDate = format(new Date(), 'MMM dd, yyyy');
   const pageH   = doc.internal.pageSize.getHeight();
   for (let i = 1; i <= total; i++) {
     doc.setPage(i);
     const y = pageH - 7;
     doc.setFontSize(7);
-    doc.setFont(undefined, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.setTextColor(...C.gray500);
     doc.setDrawColor(...C.gray200);
     doc.setLineWidth(0.25);
@@ -180,7 +180,7 @@ export const exportStudentSubjectReportPDF = (reportData, options = {}) => {
   ], curY, pageWidth, margin);
 
   /* Legend */
-  doc.setFontSize(7).setFont(undefined, 'italic').setTextColor(...C.gray500);
+  doc.setFontSize(7).setFont('helvetica', 'italic').setTextColor(...C.gray500);
   doc.text('+  Easily Meeting Expectations    =  Meeting Expectations    x  Needs Practice', margin, curY);
   curY += 5;
   doc.setTextColor(...C.gray900);
@@ -388,7 +388,7 @@ export const exportStudentReportPDF = (student, assessments, options = {}) => {
     }
 
     /* Subject heading */
-    doc.setFontSize(10).setFont(undefined, 'bold').setTextColor(...C.navy);
+    doc.setFontSize(10).setFont('helvetica', 'bold').setTextColor(...C.navy);
     doc.text(subjectData.subject, margin, curY + 4);
     curY += 8;
     doc.setTextColor(...C.gray900);
@@ -479,7 +479,7 @@ export const exportClassSummaryPDF = (classData, students, statistics, options =
   ], curY, pageWidth, margin);
 
   /* Quick stats row */
-  doc.setFontSize(8).setFont(undefined, 'normal').setTextColor(...C.gray500);
+  doc.setFontSize(8).setFont('helvetica', 'normal').setTextColor(...C.gray500);
   doc.text(
     `Completion Rate: ${statistics.completionRate?.percentage || 0}%   |   ` +
     `Overall Performance: ${statistics.performancePercentage || 0}%   |   ` +
@@ -491,7 +491,7 @@ export const exportClassSummaryPDF = (classData, students, statistics, options =
 
   /* Students needing attention */
   if (statistics.studentsNeedingAttention?.length > 0) {
-    doc.setFontSize(10).setFont(undefined, 'bold').setTextColor(...C.navy);
+    doc.setFontSize(10).setFont('helvetica', 'bold').setTextColor(...C.navy);
     doc.text('Students Needing Attention', margin, curY);
     curY += 4;
     doc.setTextColor(...C.gray900);
@@ -519,7 +519,7 @@ export const exportClassSummaryPDF = (classData, students, statistics, options =
     doc.addPage();
     curY = 15;
   }
-  doc.setFontSize(10).setFont(undefined, 'bold').setTextColor(...C.navy);
+  doc.setFontSize(10).setFont('helvetica', 'bold').setTextColor(...C.navy);
   doc.text('Student Roster', margin, curY);
   curY += 4;
   doc.setTextColor(...C.gray900);
