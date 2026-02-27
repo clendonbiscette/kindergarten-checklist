@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import {
   Globe, School, Users, GraduationCap, BookOpen,
   LogOut, BarChart3, RefreshCw, MapPin, Plus, X,
-  Download, Mail, User, Building2,
+  Download, Mail, User, Building2, Key,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import apiClient from '../api/client';
 import { reportsAPI } from '../api/reports';
 import AppFooter from './AppFooter';
+import ChangePasswordModal from './ChangePasswordModal';
 
 // OECS brand colours
 const NAVY = '#1E3A5F';
@@ -296,6 +297,7 @@ const CountryAdminDashboard = () => {
   // Modal state
   const [showCreateSchool, setShowCreateSchool] = useState(false);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   // Reports tab state
   const [reportSchoolId, setReportSchoolId] = useState('');
@@ -663,6 +665,14 @@ const CountryAdminDashboard = () => {
               <span className="text-white/60">Country Admin</span>
             </div>
             <button
+              onClick={() => setShowChangePassword(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded text-sm transition-colors"
+              title="Change Password"
+            >
+              <Key size={16} />
+              <span className="hidden sm:inline">Password</span>
+            </button>
+            <button
               onClick={logout}
               className="flex items-center gap-2 px-3 py-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded text-sm transition-colors"
             >
@@ -704,6 +714,10 @@ const CountryAdminDashboard = () => {
       </div>
 
       <AppFooter />
+
+      {showChangePassword && (
+        <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
+      )}
     </div>
   );
 };

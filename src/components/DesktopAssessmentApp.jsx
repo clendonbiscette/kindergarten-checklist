@@ -1668,8 +1668,10 @@ const DesktopAssessmentApp = () => {
             {draftBanner && currentView === 'data-entry' && (
               <div className="mb-3 flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                 <p className="text-sm text-amber-800">
-                  <span className="font-medium">Unsaved assessments</span> from a previous session were found
-                  {draftBanner.studentName ? <> for <span className="font-medium">{draftBanner.studentName}</span></> : ''}.
+                  <span className="font-medium">Unsaved assessments</span>
+                  {draftBanner.studentName ? <> for <span className="font-medium">{draftBanner.studentName}</span></> : ''}
+                  {draftBanner.savedAt ? <> from {new Date(draftBanner.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}{' '}
+                    {new Date(draftBanner.savedAt).toDateString() === new Date().toDateString() ? 'today' : `on ${new Date(draftBanner.savedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}`}</> : ' from a previous session'}.
                 </p>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
