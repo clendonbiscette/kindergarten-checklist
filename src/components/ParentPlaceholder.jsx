@@ -19,7 +19,7 @@ const ParentPlaceholder = () => {
             Welcome, <span className="font-semibold">{user?.firstName}</span>.
           </p>
           <p className="text-gray-600 text-sm leading-relaxed">
-            To view your child&apos;s progress report, please contact their teacher or school administrator. Reports are provided directly by the school.
+            Your child&apos;s progress report is prepared and shared directly by their teacher. You do not need to log in — simply ask your child&apos;s teacher for a copy of the latest report.
           </p>
           <div className="pt-4">
             <button

@@ -1,6 +1,21 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCountries, usePublicSchools } from '../hooks/useSchools';
+
+const getPasswordStrength = (pw) => {
+  if (!pw) return null;
+  const checks = [
+    pw.length >= 8,
+    /[A-Z]/.test(pw),
+    /[a-z]/.test(pw),
+    /\d/.test(pw),
+  ];
+  const passed = checks.filter(Boolean).length;
+  if (passed <= 1) return { level: 'weak', label: 'Weak', color: 'bg-red-400', textColor: 'text-red-600' };
+  if (passed === 2) return { level: 'fair', label: 'Fair', color: 'bg-amber-400', textColor: 'text-amber-600' };
+  if (passed === 3) return { level: 'good', label: 'Good', color: 'bg-blue-400', textColor: 'text-blue-600' };
+  return { level: 'strong', label: 'Strong', color: 'bg-green-500', textColor: 'text-green-600' };
+};
 
 const TeacherRegistration = ({ onBackToLogin }) => {
   const [formData, setFormData] = useState({
@@ -22,6 +37,9 @@ const TeacherRegistration = ({ onBackToLogin }) => {
   const { data: schools = [], isLoading: schoolsLoading } = usePublicSchools(
     formData.countryId ? { countryId: formData.countryId } : {}
   );
+
+  const passwordStrength = useMemo(() => getPasswordStrength(formData.password), [formData.password]);
+  const passwordsMatch = formData.confirmPassword && formData.password === formData.confirmPassword;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -198,7 +216,20 @@ const TeacherRegistration = ({ onBackToLogin }) => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7CB342]"
                 placeholder="Min. 8 characters"
               />
-              <p className="text-xs text-gray-500 mt-1">Must include uppercase, lowercase, and a number</p>
+              {passwordStrength && (
+                <div className="mt-1.5">
+                  <div className="flex gap-1 mb-1">
+                    {['weak','fair','good','strong'].map((lvl, i) => (
+                      <div key={lvl} className={`h-1 flex-1 rounded-full transition-colors ${
+                        ['weak','fair','good','strong'].indexOf(passwordStrength.level) >= i
+                          ? passwordStrength.color
+                          : 'bg-gray-200'
+                      }`} />
+                    ))}
+                  </div>
+                  <p className={`text-xs ${passwordStrength.textColor}`}>{passwordStrength.label} password</p>
+                </div>
+              )}
             </div>
 
             <div>
@@ -215,6 +246,11 @@ const TeacherRegistration = ({ onBackToLogin }) => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7CB342]"
                 placeholder="Re-enter password"
               />
+              {formData.confirmPassword && (
+                <p className={`text-xs mt-1 ${passwordsMatch ? 'text-green-600' : 'text-red-500'}`}>
+                  {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
+                </p>
+              )}
             </div>
           </div>
 

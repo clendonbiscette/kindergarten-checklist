@@ -5,7 +5,7 @@ import { usePublicSchools, useCountries } from '../hooks/useSchools';
 const PendingAssignment = () => {
   const { user, logout, assignSchool, refreshUser } = useAuth();
   const { data: countries = [] } = useCountries();
-  const [selectedCountryId, setSelectedCountryId] = useState('');
+  const [selectedCountryId, setSelectedCountryId] = useState(user?.countryId || '');
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
   const [schoolSearch, setSchoolSearch] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);

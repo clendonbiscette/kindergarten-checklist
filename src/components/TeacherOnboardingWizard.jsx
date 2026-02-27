@@ -42,7 +42,7 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
       const res = await classesAPI.create({
         name: className,
         gradeLevel,
-        schoolYear: getCurrentSchoolYear(),
+        academicYear: getCurrentSchoolYear(),
       });
       if (res.success) {
         setCreatedClass(res.data);

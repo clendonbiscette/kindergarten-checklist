@@ -2,7 +2,7 @@ import express from 'express';
 import {
   register, login, getProfile, registerTeacher, refreshToken,
   verifyEmail, resendVerification, forgotPassword, resetPassword,
-  assignSchool, createSchoolAdmin,
+  assignSchool, createSchoolAdmin, changePassword,
 } from '../controllers/authController.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import {
@@ -28,6 +28,7 @@ router.post('/reset-password', validateResetPassword, resetPassword);
 
 // Protected routes
 router.get('/profile', authenticate, getProfile);
+router.post('/change-password', authenticate, changePassword);
 router.post('/assign-school', authenticate, authorize('TEACHER'), assignSchool);
 router.post('/create-school-admin', authenticate, authorize('SUPERUSER', 'COUNTRY_ADMIN', 'SCHOOL_ADMIN'), createSchoolAdmin);
 

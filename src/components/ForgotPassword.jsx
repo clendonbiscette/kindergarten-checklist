@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../api/auth';
 
 const ForgotPassword = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -45,7 +47,7 @@ const ForgotPassword = () => {
             </div>
             <button
               type="button"
-              onClick={() => { window.location.href = '/'; }}
+              onClick={() => navigate('/')}
               className="w-full bg-[#1E3A5F] text-white py-3 px-4 rounded-lg hover:bg-[#2D4A6F] font-semibold transition-colors"
             >
               Back to Login
@@ -84,7 +86,7 @@ const ForgotPassword = () => {
 
             <button
               type="button"
-              onClick={() => { window.location.href = '/'; }}
+              onClick={() => navigate('/')}
               className="w-full text-center text-sm text-[#1E3A5F] hover:underline"
             >
               Back to Login

@@ -193,7 +193,7 @@ const ReportDashboard = ({
               <div className="p-3 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
                 <Target size={24} className="text-purple-600" />
               </div>
-              <h3 className="font-semibold text-lg text-gray-800">By SCO</h3>
+              <h3 className="font-semibold text-lg text-gray-800">By Learning Outcome</h3>
             </div>
             <p className="text-sm text-gray-600">
               See how each student performed on a specific learning outcome. Perfect for

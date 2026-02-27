@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   School, Users, GraduationCap, BookOpen, LogOut, Edit2,
   Save, X, Phone, Mail, MapPin, Calendar, RefreshCw, Plus,
-  UserPlus, Search, BarChart3, Upload
+  UserPlus, Search, BarChart3, Upload, Copy, CheckCheck, Key
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -16,6 +16,7 @@ import StudentEntryModal from './StudentEntryModal';
 import StudentEditModal from './StudentEditModal';
 import BulkImportStudents from './BulkImportStudents';
 import ConfirmModal from './ConfirmModal';
+import ChangePasswordModal from './ChangePasswordModal';
 import AppFooter from './AppFooter';
 import { ReportDashboard } from './reports';
 import { useStrands, useLearningOutcomes, useSubjects } from '../hooks/useCurriculum';
@@ -43,6 +44,8 @@ const SchoolAdminDashboard = ({ schoolData: initialSchoolData }) => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [copiedRegLink, setCopiedRegLink] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   // Modal states
   const [showClassModal, setShowClassModal] = useState(false);
@@ -792,12 +795,27 @@ const SchoolAdminDashboard = ({ schoolData: initialSchoolData }) => {
       {/* Info Box */}
       <div className="bg-blue-50/80 rounded-lg p-4">
         <h3 className="font-medium text-blue-800 mb-2">How Teachers Join Your School</h3>
-        <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-          <li>Teachers visit the registration page</li>
-          <li>They select your country and find "{schoolData?.name}" in the school dropdown</li>
-          <li>They complete their registration</li>
-          <li>They appear in your Teachers list above</li>
+        <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside mb-4">
+          <li>Share the registration link below with your teachers</li>
+          <li>They select your country and find &ldquo;{schoolData?.name}&rdquo; in the school dropdown</li>
+          <li>After registering, they appear in the list above</li>
         </ol>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 text-xs bg-white border border-blue-200 rounded px-2 py-1.5 text-blue-800 truncate">
+            {window.location.origin}/?register=teacher
+          </code>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(`${window.location.origin}/?register=teacher`).then(() => {
+                setCopiedRegLink(true);
+                setTimeout(() => setCopiedRegLink(false), 2000);
+              });
+            }}
+            className="shrink-0 flex items-center gap-1.5 text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors"
+          >
+            {copiedRegLink ? <><CheckCheck size={13} /> Copied!</> : <><Copy size={13} /> Copy Link</>}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -840,6 +858,14 @@ const SchoolAdminDashboard = ({ schoolData: initialSchoolData }) => {
               <span className="text-slate-400">|</span>
               <span className="text-slate-300">School Admin</span>
             </div>
+            <button
+              onClick={() => setShowChangePassword(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-sm transition-colors"
+              title="Change Password"
+            >
+              <Key size={16} />
+              <span className="hidden sm:inline">Password</span>
+            </button>
             <button
               onClick={logout}
               className="flex items-center gap-2 px-3 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-sm transition-colors"
@@ -959,7 +985,7 @@ const SchoolAdminDashboard = ({ schoolData: initialSchoolData }) => {
             : confirmModal.type === 'student'
             ? `Are you sure you want to remove "${confirmModal.data?.name}"? This action cannot be undone.`
             : confirmModal.type === 'term'
-            ? `Are you sure you want to delete "${confirmModal.data?.name}"? This will only work if no assessments are linked to this term.`
+            ? `Are you sure you want to delete "${confirmModal.data?.name}"? This cannot be undone.`
             : 'Are you sure you want to proceed?'
         }
         confirmText={
@@ -969,6 +995,10 @@ const SchoolAdminDashboard = ({ schoolData: initialSchoolData }) => {
 
       {/* Footer */}
       <AppFooter />
+
+      {showChangePassword && (
+        <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
+      )}
     </div>
   );
 };

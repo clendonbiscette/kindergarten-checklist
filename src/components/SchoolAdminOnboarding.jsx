@@ -114,10 +114,10 @@ const SchoolAdminOnboarding = ({ onComplete }) => {
           </button>
           <button
             onClick={() => setMode('create')}
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${
+            className={`flex-1 py-3 text-xs font-medium transition-colors ${
               mode === 'create'
-                ? 'border-b-2 border-[#1E3A5F] text-[#1E3A5F]'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'border-b-2 border-gray-400 text-gray-600'
+                : 'text-gray-400 hover:text-gray-500'
             }`}
           >
             School not listed? Create it

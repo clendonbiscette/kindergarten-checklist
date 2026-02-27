@@ -19,6 +19,7 @@ import {
   useCreateSchool,
 } from '../hooks/useAdmin';
 import ConfirmModal from './ConfirmModal';
+import ChangePasswordModal from './ChangePasswordModal';
 import AppFooter from './AppFooter';
 import BulkImportStudents from './BulkImportStudents';
 import { useStudents } from '../hooks/useStudents';
@@ -36,17 +37,21 @@ const SuperuserDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [countryFilter, setCountryFilter] = useState('');
+  const [usersPage, setUsersPage] = useState(1);
   const [expandedUserId, setExpandedUserId] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, user: null });
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [selectedSchoolForStudents, setSelectedSchoolForStudents] = useState('');
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   // Fetch data
   const { data: stats, isLoading: loadingStats } = useAdminStats();
   const { data: usersData, isLoading: loadingUsers, refetch: refetchUsers } = useAdminUsers({
     role: roleFilter || undefined,
     search: searchTerm || undefined,
+    page: usersPage,
+    limit: 50,
   });
   const { data: schools = [], isLoading: loadingSchools } = useAdminSchools({
     countryId: countryFilter || undefined,
@@ -252,13 +257,13 @@ const SuperuserDashboard = () => {
               type="text"
               placeholder="Search by name or email..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setUsersPage(1); }}
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-md text-sm"
             />
           </div>
           <select
             value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
+            onChange={(e) => { setRoleFilter(e.target.value); setUsersPage(1); }}
             className="px-3 py-2 border border-gray-200 rounded-md text-sm min-w-[150px]"
           >
             <option value="">All Roles</option>
@@ -389,8 +394,29 @@ const SuperuserDashboard = () => {
               </table>
             </div>
             {usersData?.pagination && (
-              <div className="border-t px-4 py-3 bg-gray-50 text-sm text-gray-600">
-                Showing {users.length} of {usersData.pagination.total} users
+              <div className="border-t px-4 py-3 bg-gray-50 flex items-center justify-between text-sm text-gray-600">
+                <span>
+                  Showing {((usersPage - 1) * 50) + 1}–{Math.min(usersPage * 50, usersData.pagination.total)} of {usersData.pagination.total} users
+                </span>
+                {usersData.pagination.pages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setUsersPage(p => Math.max(1, p - 1))}
+                      disabled={usersPage <= 1}
+                      className="px-2 py-1 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors"
+                    >
+                      ‹
+                    </button>
+                    <span className="text-gray-700">Page {usersPage} of {usersData.pagination.pages}</span>
+                    <button
+                      onClick={() => setUsersPage(p => Math.min(usersData.pagination.pages, p + 1))}
+                      disabled={usersPage >= usersData.pagination.pages}
+                      className="px-2 py-1 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors"
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -597,6 +623,14 @@ const SuperuserDashboard = () => {
               <span className="text-purple-400 font-medium">Superuser</span>
             </div>
             <button
+              onClick={() => setShowChangePassword(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-sm transition-colors"
+              title="Change Password"
+            >
+              <Key size={16} />
+              <span className="hidden sm:inline">Password</span>
+            </button>
+            <button
               onClick={logout}
               className="flex items-center gap-2 px-3 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-sm transition-colors"
             >
@@ -721,6 +755,10 @@ const SuperuserDashboard = () => {
 
       {/* Footer */}
       <AppFooter />
+
+      {showChangePassword && (
+        <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
+      )}
     </div>
   );
 };
@@ -795,7 +833,7 @@ const CreateUserModal = ({ onClose, onSubmit, isLoading }) => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Temporary Password</label>
             <input
-              type="text"
+              type="password"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               className="w-full px-3 py-2 border border-gray-200 rounded-md"
@@ -982,7 +1020,7 @@ const ResetPasswordModal = ({ user, onClose, onSubmit, isLoading }) => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
             <input
-              type="text"
+              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-md"

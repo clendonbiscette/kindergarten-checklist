@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/auth';
 
 const VerifyEmail = () => {
-  const token = new URLSearchParams(window.location.search).get('token');
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
 
   const [status, setStatus] = useState('loading'); // loading | success | error
   const [message, setMessage] = useState('');
@@ -57,7 +60,7 @@ const VerifyEmail = () => {
               <p className="text-gray-600 text-sm">{message}</p>
             </div>
             <button
-              onClick={() => { window.location.href = '/'; }}
+              onClick={() => navigate('/')}
               className="w-full bg-[#7CB342] text-white py-3 px-4 rounded-lg hover:bg-[#689F38] font-semibold transition-colors"
             >
               Go to Login
@@ -78,7 +81,7 @@ const VerifyEmail = () => {
             </div>
             <div className="space-y-3">
               <button
-                onClick={() => { window.location.href = '/'; }}
+                onClick={() => navigate('/')}
                 className="w-full bg-[#7CB342] text-white py-3 px-4 rounded-lg hover:bg-[#689F38] font-semibold transition-colors"
               >
                 Go to Login

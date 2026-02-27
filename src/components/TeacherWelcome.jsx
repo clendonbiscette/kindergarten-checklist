@@ -8,7 +8,7 @@ const steps = [
   {
     icon: Users,
     title: 'Select Your Context',
-    description: 'Choose your country, school, and academic term from the dropdowns at the top of the page.',
+    description: 'Choose your country, school, and academic term from the dropdowns in the left sidebar.',
     color: 'blue'
   },
   {

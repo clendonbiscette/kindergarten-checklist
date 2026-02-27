@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/auth';
 
 const ResetPassword = () => {
-  const token = new URLSearchParams(window.location.search).get('token');
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -16,7 +19,7 @@ const ResetPassword = () => {
         <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center">
           <p className="text-red-600 font-medium mb-4">Invalid or missing reset token.</p>
           <button
-            onClick={() => { window.location.href = '/forgot-password'; }}
+            onClick={() => navigate('/forgot-password')}
             className="text-[#1E3A5F] hover:underline text-sm"
           >
             Request a new reset link
@@ -70,7 +73,7 @@ const ResetPassword = () => {
             </div>
             <button
               type="button"
-              onClick={() => { window.location.href = '/'; }}
+              onClick={() => navigate('/')}
               className="w-full bg-[#7CB342] text-white py-3 px-4 rounded-lg hover:bg-[#689F38] font-semibold transition-colors"
             >
               Go to Login

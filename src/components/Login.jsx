@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../api/auth';
 import TeacherRegistration from './TeacherRegistration';
 import { ClipboardCheck, BookOpen, Star } from 'lucide-react';
 
 const Login = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -199,7 +201,7 @@ const Login = () => {
 
             <button
               type="button"
-              onClick={() => { window.location.href = '/forgot-password'; }}
+              onClick={() => navigate('/forgot-password')}
               className="w-full text-center text-sm text-gray-500 hover:text-[#1E3A5F] transition-colors"
             >
               Forgot your password?

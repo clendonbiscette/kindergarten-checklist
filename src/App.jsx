@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import Login from './components/Login'
 import DesktopAssessmentApp from './components/DesktopAssessmentApp'
@@ -63,69 +64,65 @@ function App() {
     }
   }, [isAuthenticated, user?.role, user?.schoolId])
 
-  // Handle public path-based routes before auth check
-  const path = window.location.pathname
-  if (path === '/forgot-password') return <ForgotPassword />
-  if (path === '/reset-password') return <ResetPassword />
-  if (path === '/verify-email') return <VerifyEmail />
-
-  if (isLoading) {
-    return <LoadingSpinner fullScreen message="Loading..." />
-  }
-
-  if (!isAuthenticated) {
-    return <Login />
-  }
-
-  // Route based on user role
-  if (user?.role === 'SUPERUSER') {
-    return <SuperuserDashboard />
-  }
-
-  if (user?.role === 'COUNTRY_ADMIN') {
-    return <CountryAdminDashboard />
-  }
-
-  if (user?.role === 'SCHOOL_ADMIN') {
-    if (checkingSchool) {
-      return <LoadingSpinner fullScreen message="Loading your school..." />
+  const renderAuthenticatedApp = () => {
+    if (isLoading) {
+      return <LoadingSpinner fullScreen message="Loading..." />
     }
 
-    // If School Admin has no school assigned, show onboarding
-    if (!schoolData) {
-      return (
-        <SchoolAdminOnboarding
-          onComplete={(school) => setSchoolData(school)}
-        />
-      )
+    if (!isAuthenticated) {
+      return <Login />
     }
 
-    // School Admin has a school, show dashboard
-    return <SchoolAdminDashboard schoolData={schoolData} />
-  }
-
-  // PARENT_STUDENT role: no app access, show informational placeholder
-  if (user?.role === 'PARENT_STUDENT') {
-    return <ParentPlaceholder />
-  }
-
-  // TEACHER role: if not assigned to a school yet, show pending screen
-  if (user?.role === 'TEACHER' && !user?.schoolId) {
-    return <PendingAssignment />
-  }
-
-  // TEACHER role with school: check for classes (first-time onboarding)
-  if (user?.role === 'TEACHER' && user?.schoolId) {
-    if (hasClasses === null) {
-      return <LoadingSpinner fullScreen message="Loading your classroom..." />
+    if (user?.role === 'SUPERUSER') {
+      return <SuperuserDashboard />
     }
-    if (hasClasses === false) {
-      return <TeacherOnboardingWizard onComplete={() => setHasClasses(true)} />
+
+    if (user?.role === 'COUNTRY_ADMIN') {
+      return <CountryAdminDashboard />
     }
+
+    if (user?.role === 'SCHOOL_ADMIN') {
+      if (checkingSchool) {
+        return <LoadingSpinner fullScreen message="Loading your school..." />
+      }
+      if (!schoolData) {
+        return (
+          <SchoolAdminOnboarding
+            onComplete={(school) => setSchoolData(school)}
+          />
+        )
+      }
+      return <SchoolAdminDashboard schoolData={schoolData} />
+    }
+
+    if (user?.role === 'PARENT_STUDENT') {
+      return <ParentPlaceholder />
+    }
+
+    if (user?.role === 'TEACHER' && !user?.schoolId) {
+      return <PendingAssignment />
+    }
+
+    if (user?.role === 'TEACHER' && user?.schoolId) {
+      if (hasClasses === null) {
+        return <LoadingSpinner fullScreen message="Loading your classroom..." />
+      }
+      if (hasClasses === false) {
+        return <TeacherOnboardingWizard onComplete={() => setHasClasses(true)} />
+      }
+    }
+
+    return <DesktopAssessmentApp />
   }
 
-  // Default: Teacher assessment view
-  return <DesktopAssessmentApp />
+  return (
+    <Routes>
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/*" element={renderAuthenticatedApp()} />
+    </Routes>
+  )
 }
 
 export default App

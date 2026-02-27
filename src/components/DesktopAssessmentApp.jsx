@@ -3,7 +3,7 @@ import {
   Download, Search, X, LogOut, Menu, ChevronRight,
   Home, FileText, BarChart3, User, School, Calendar,
   BookOpen, Users, TrendingUp, CheckCircle2, PlusCircle,
-  UserPlus, GraduationCap, Edit2, Trash2, Upload
+  UserPlus, GraduationCap, Edit2, Trash2, Upload, Key
 } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
@@ -31,8 +31,10 @@ import BulkAssignStudents from './BulkAssignStudents';
 import AssessmentEditModal from './AssessmentEditModal';
 import ConfirmModal from './ConfirmModal';
 import TeacherWelcome from './TeacherWelcome';
+import ChangePasswordModal from './ChangePasswordModal';
 import AppFooter from './AppFooter';
 import { saveSession, getSession } from '../utils/sessionStorage';
+import { offlineQueue } from '../utils/offlineQueue';
 import { exportStudentReportPDF } from '../utils/pdfExport';
 import { reportsAPI } from '../api/reports';
 import { calculateClassStatistics, calculateRatingDistribution, calculateProgressBySubject } from '../utils/analyticsCalculations';
@@ -59,6 +61,11 @@ const DesktopAssessmentApp = () => {
   const [editingClass, setEditingClass] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
   const [editingAssessment, setEditingAssessment] = useState(null);
+
+  const [showChangePassword, setShowChangePassword] = useState(false);
+
+  // Offline queue state
+  const [queueCount, setQueueCount] = useState(offlineQueue.count());
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: null, data: null });
@@ -101,9 +108,12 @@ const DesktopAssessmentApp = () => {
   // Write draft on every tempAssessments change
   useEffect(() => {
     if (Object.keys(tempAssessments).length > 0) {
+      const studentObj = students.find(s => s.id === selectedStudent);
+      const studentName = studentObj ? `${studentObj.firstName} ${studentObj.lastName}` : '';
       localStorage.setItem('ohpc_draft_assessments', JSON.stringify({
         classId: selectedClassId,
         studentId: selectedStudent,
+        studentName,
         data: tempAssessments,
         savedAt: new Date().toISOString(),
       }));
@@ -121,6 +131,34 @@ const DesktopAssessmentApp = () => {
     localStorage.removeItem('ohpc_draft_assessments');
     setDraftBanner(null);
   };
+
+  // Flush offline queue when connectivity is restored
+  useEffect(() => {
+    const flushQueue = async () => {
+      const items = offlineQueue.getAll();
+      if (items.length === 0) return;
+
+      let flushed = 0;
+      // Process in reverse so removals don't shift indices
+      for (let i = items.length - 1; i >= 0; i--) {
+        try {
+          const { _queuedAt, ...payload } = items[i];
+          await createAssessment.mutateAsync(payload);
+          offlineQueue.remove(i);
+          flushed++;
+        } catch {
+          // Leave in queue for next retry
+        }
+      }
+      setQueueCount(offlineQueue.count());
+      if (flushed > 0) {
+        toast.success(`${flushed} queued assessment${flushed !== 1 ? 's' : ''} saved`);
+      }
+    };
+
+    window.addEventListener('online', flushQueue);
+    return () => window.removeEventListener('online', flushQueue);
+  }, []);
 
   // Fetch data with React Query
   const { data: countries = [], isLoading: loadingCountries } = useCountries();
@@ -336,15 +374,17 @@ const DesktopAssessmentApp = () => {
       return;
     }
 
+    const payload = {
+      studentId: selectedStudent,
+      learningOutcomeId: outcome.id,
+      termId: selectedTerm,
+      assessmentDate: selectedDate,
+      rating: rating,
+      comment,
+    };
+
     try {
-      await createAssessment.mutateAsync({
-        studentId: selectedStudent,
-        learningOutcomeId: outcome.id,
-        termId: selectedTerm,
-        assessmentDate: selectedDate,
-        rating: rating,
-        comment,
-      });
+      await createAssessment.mutateAsync(payload);
 
       const newTemp = { ...tempAssessments };
       delete newTemp[outcome.id];
@@ -361,7 +401,22 @@ const DesktopAssessmentApp = () => {
 
       toast.success('Assessment saved successfully');
     } catch (error) {
-      toast.error('Failed to save assessment: ' + (error.message || 'Unknown error'));
+      // If offline, queue for later sync instead of showing an error
+      if (!navigator.onLine) {
+        const count = offlineQueue.add(payload);
+        setQueueCount(count);
+
+        const newTemp = { ...tempAssessments };
+        delete newTemp[outcome.id];
+        setTempAssessments(newTemp);
+        const newComments = { ...tempComments };
+        delete newComments[outcome.id];
+        setTempComments(newComments);
+
+        toast.warning(`Offline — assessment queued (${count} pending). Will sync when reconnected.`);
+      } else {
+        toast.error('Failed to save assessment: ' + (error.message || 'Unknown error'));
+      }
     }
   };
 
@@ -1350,6 +1405,14 @@ const DesktopAssessmentApp = () => {
             <span className="text-slate-300">{user?.role?.replace('_', ' ')}</span>
           </div>
           <button
+            onClick={() => setShowChangePassword(true)}
+            className="flex items-center gap-1 px-3 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-xs sm:text-sm transition-colors"
+            title="Change Password"
+          >
+            <Key size={16} />
+            <span className="hidden sm:inline">Password</span>
+          </button>
+          <button
             onClick={logout}
             className="flex items-center gap-1 px-3 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-xs sm:text-sm transition-colors"
           >
@@ -1605,7 +1668,8 @@ const DesktopAssessmentApp = () => {
             {draftBanner && currentView === 'data-entry' && (
               <div className="mb-3 flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                 <p className="text-sm text-amber-800">
-                  <span className="font-medium">Unsaved assessments</span> from a previous session were found.
+                  <span className="font-medium">Unsaved assessments</span> from a previous session were found
+                  {draftBanner.studentName ? <> for <span className="font-medium">{draftBanner.studentName}</span></> : ''}.
                 </p>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
@@ -1822,6 +1886,10 @@ const DesktopAssessmentApp = () => {
 
       {/* Footer */}
       <AppFooter />
+
+      {showChangePassword && (
+        <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
+      )}
     </div>
   );
 };

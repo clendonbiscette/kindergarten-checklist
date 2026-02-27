@@ -40,6 +40,22 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
+            // Mutating assessment requests — BackgroundSync retries after reconnect
+            urlPattern: ({ url, request }) =>
+              url.pathname.startsWith('/api/assessments') &&
+              ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method),
+            handler: 'NetworkOnly',
+            options: {
+              backgroundSync: {
+                name: 'assessment-sync-queue',
+                options: {
+                  maxRetentionTime: 24 * 60, // 24 hours in minutes
+                },
+              },
+            },
+          },
+          {
+            // All other API reads — NetworkFirst with cache fallback
             urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
             handler: 'NetworkFirst',
             options: {
