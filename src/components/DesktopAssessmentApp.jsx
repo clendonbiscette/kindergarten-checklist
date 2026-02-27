@@ -1856,10 +1856,21 @@ const DesktopAssessmentApp = () => {
               </div>
 
               <div>
-                <label className="text-xs font-medium text-gray-700 flex items-center gap-1">
-                  <Calendar size={12} />
-                  Term
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-medium text-gray-700 flex items-center gap-1">
+                    <Calendar size={12} />
+                    Term
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateTermModal(true)}
+                    className="flex items-center gap-0.5 text-xs text-[#1E3A5F] hover:text-[#2D4A6F] font-medium"
+                    title="Create new term"
+                  >
+                    <PlusCircle size={13} />
+                    New
+                  </button>
+                </div>
                 <select
                   value={selectedTerm}
                   onChange={(e) => setSelectedTerm(e.target.value)}

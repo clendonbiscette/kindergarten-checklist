@@ -28,6 +28,7 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
   // Step 0 — Class form
   const [className, setClassName] = useState('');
   const [gradeLevel, setGradeLevel] = useState('Kindergarten');
+  const [schoolYear, setSchoolYear] = useState(getCurrentSchoolYear());
   const [classError, setClassError] = useState('');
   const [classLoading, setClassLoading] = useState(false);
 
@@ -39,7 +40,7 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
 
   // Step 2 — Term form
   const [termName, setTermName] = useState('Term 1');
-  const [termSchoolYear, setTermSchoolYear] = useState(getCurrentSchoolYear());
+  const [termSchoolYear, setTermSchoolYear] = useState('');
   const [termStartDate, setTermStartDate] = useState('');
   const [termEndDate, setTermEndDate] = useState('');
   const [termError, setTermError] = useState('');
@@ -54,7 +55,7 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
       const res = await classesAPI.create({
         name: className,
         gradeLevel,
-        academicYear: getCurrentSchoolYear(),
+        academicYear: schoolYear,
       });
       if (res.success) {
         setCreatedClass(res.data);
@@ -87,6 +88,7 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
     const valid = students.filter(s => s.firstName.trim() && s.lastName.trim());
     if (valid.length === 0) {
       // Skip to term step with 0 students
+      setTermSchoolYear(schoolYear);
       setStep(2);
       return;
     }
@@ -118,10 +120,12 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
     setAddedCount(count);
     setStudentErrors(errors);
     setAddingStudents(false);
+    setTermSchoolYear(schoolYear);
     setStep(2);
   };
 
   const handleSkipStudents = () => {
+    setTermSchoolYear(schoolYear);
     setStep(2);
   };
 
@@ -215,8 +219,18 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
           </select>
         </div>
 
-        <div className="bg-gray-50 rounded-lg px-3 py-2.5 text-sm text-gray-500">
-          School Year: <span className="font-medium text-gray-700">{getCurrentSchoolYear()}</span>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            School Year <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={schoolYear}
+            onChange={e => setSchoolYear(e.target.value)}
+            placeholder="e.g. 2025-2026"
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-[#1E3A5F] focus:outline-none"
+            required
+          />
         </div>
 
         <button
