@@ -1,5 +1,4 @@
 import prisma from '../utils/prisma.js';
-// import { createAuditLog, softDeleteWithAudit } from '../utils/audit.js'; // Uncomment after migration
 
 // Get all students (with optional school filtering)
 export const getStudents = async (req, res, next) => {
