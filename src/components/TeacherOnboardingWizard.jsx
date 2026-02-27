@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { CheckCircle, ChevronRight, Plus, Trash2, BookOpen, Users, PartyPopper } from 'lucide-react';
+import { CheckCircle, ChevronRight, Plus, Trash2, BookOpen, Users, PartyPopper, Calendar } from 'lucide-react';
 import { classesAPI } from '../api/classes';
 import apiClient from '../api/client';
+import { useCreateTerm } from '../hooks/useTerms';
+import { useAuth } from '../contexts/AuthContext';
 
-const STEPS = ['Create Your Class', 'Add Students', 'Ready!'];
+const STEPS = ['Create Class', 'Add Students', 'Create Term', 'Ready!'];
 
 const GRADE_OPTIONS = [
   'Pre-K', 'Kindergarten', 'Grade 1', 'Grade 2', 'Grade 3',
@@ -14,11 +16,13 @@ const getCurrentSchoolYear = () => {
   const year = now.getFullYear();
   const month = now.getMonth(); // Sep = 8
   const startYear = month >= 8 ? year : year - 1;
-  return `${startYear}-${String(startYear + 1).slice(2)}`;
+  return `${startYear}-${startYear + 1}`;
 };
 
 const TeacherOnboardingWizard = ({ onComplete }) => {
-  const [step, setStep] = useState(0); // 0: class, 1: students, 2: done
+  const { user } = useAuth();
+  const [step, setStep] = useState(0); // 0: class, 1: students, 2: term, 3: done
+
   const [createdClass, setCreatedClass] = useState(null);
 
   // Step 0 — Class form
@@ -32,6 +36,14 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
   const [studentErrors, setStudentErrors] = useState([]);
   const [addingStudents, setAddingStudents] = useState(false);
   const [addedCount, setAddedCount] = useState(0);
+
+  // Step 2 — Term form
+  const [termName, setTermName] = useState('Term 1');
+  const [termSchoolYear, setTermSchoolYear] = useState(getCurrentSchoolYear());
+  const [termStartDate, setTermStartDate] = useState('');
+  const [termEndDate, setTermEndDate] = useState('');
+  const [termError, setTermError] = useState('');
+  const createTermMutation = useCreateTerm();
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleCreateClass = async (e) => {
@@ -74,7 +86,7 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
   const handleAddStudents = async () => {
     const valid = students.filter(s => s.firstName.trim() && s.lastName.trim());
     if (valid.length === 0) {
-      // Skip to done with 0 students
+      // Skip to term step with 0 students
       setStep(2);
       return;
     }
@@ -111,6 +123,33 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
 
   const handleSkipStudents = () => {
     setStep(2);
+  };
+
+  const handleCreateTerm = async (e) => {
+    e.preventDefault();
+    setTermError('');
+
+    if (!termName.trim()) { setTermError('Term name is required'); return; }
+    if (!termSchoolYear.trim()) { setTermError('School year is required'); return; }
+    if (!termStartDate) { setTermError('Start date is required'); return; }
+    if (!termEndDate) { setTermError('End date is required'); return; }
+    if (new Date(termEndDate) <= new Date(termStartDate)) {
+      setTermError('End date must be after start date');
+      return;
+    }
+
+    try {
+      await createTermMutation.mutateAsync({
+        name: termName.trim(),
+        schoolYear: termSchoolYear.trim(),
+        startDate: termStartDate,
+        endDate: termEndDate,
+        schoolId: user?.schoolId,
+      });
+      setStep(3);
+    } catch (err) {
+      setTermError(err.message || 'Failed to create term');
+    }
   };
 
   // ── Progress dots ─────────────────────────────────────────────────────────
@@ -258,7 +297,96 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
     </div>
   );
 
-  // ── Step 2: Done ──────────────────────────────────────────────────────────
+  // ── Step 2: Create Term ───────────────────────────────────────────────────
+  const renderTermStep = () => (
+    <div>
+      <div className="text-center mb-6">
+        <Calendar size={36} className="mx-auto mb-3 text-[#1E3A5F]" />
+        <h2 className="text-xl font-bold text-gray-800">Create your first term</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Academic terms define the period for assessments. You need at least one to start recording.
+        </p>
+      </div>
+
+      <form onSubmit={handleCreateTerm} className="space-y-4">
+        {termError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{termError}</div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Term Name <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={termName}
+              onChange={e => setTermName(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-[#1E3A5F] focus:outline-none"
+            >
+              <option>Term 1</option>
+              <option>Term 2</option>
+              <option>Term 3</option>
+              <option>Term 4</option>
+              <option>Semester 1</option>
+              <option>Semester 2</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              School Year <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={termSchoolYear}
+              onChange={e => setTermSchoolYear(e.target.value)}
+              placeholder="2025-2026"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-[#1E3A5F] focus:outline-none"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Start Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={termStartDate}
+              onChange={e => setTermStartDate(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-[#1E3A5F] focus:outline-none"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              End Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={termEndDate}
+              onChange={e => setTermEndDate(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-[#1E3A5F] focus:outline-none"
+              required
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={createTermMutation.isPending}
+          className="w-full py-3 bg-[#1E3A5F] text-white font-semibold rounded-lg hover:bg-[#2D4A6F] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {createTermMutation.isPending ? 'Creating term...' : (<>Create Term <ChevronRight size={18} /></>)}
+        </button>
+      </form>
+    </div>
+  );
+
+  // ── Step 3: Done ──────────────────────────────────────────────────────────
   const renderDoneStep = () => (
     <div className="text-center py-4">
       <PartyPopper size={48} className="mx-auto mb-4 text-[#7CB342]" />
@@ -306,7 +434,8 @@ const TeacherOnboardingWizard = ({ onComplete }) => {
           <ProgressDots />
           {step === 0 && renderClassStep()}
           {step === 1 && renderStudentsStep()}
-          {step === 2 && renderDoneStep()}
+          {step === 2 && renderTermStep()}
+          {step === 3 && renderDoneStep()}
         </div>
       </div>
     </div>

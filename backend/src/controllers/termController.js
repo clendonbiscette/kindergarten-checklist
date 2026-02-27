@@ -111,6 +111,14 @@ export const createTerm = async (req, res, next) => {
       });
     }
 
+    // Validate academic year format (YYYY-YYYY or YYYY-YY)
+    if (!/^\d{4}-\d{2,4}$/.test(schoolYear)) {
+      return res.status(400).json({
+        success: false,
+        message: 'School year must be in YYYY-YYYY format (e.g., 2025-2026)',
+      });
+    }
+
     // Validate dates
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -119,6 +127,23 @@ export const createTerm = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'End date must be after start date',
+      });
+    }
+
+    // Check for overlapping terms in the same school
+    const overlap = await prisma.academicTerm.findFirst({
+      where: {
+        schoolId,
+        startDate: { lte: end },
+        endDate: { gte: start },
+      },
+      select: { name: true, startDate: true, endDate: true },
+    });
+
+    if (overlap) {
+      return res.status(400).json({
+        success: false,
+        message: `Term dates overlap with existing term "${overlap.name}" (${new Date(overlap.startDate).toLocaleDateString()} – ${new Date(overlap.endDate).toLocaleDateString()}). Terms cannot overlap.`,
       });
     }
 

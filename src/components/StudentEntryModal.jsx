@@ -24,7 +24,7 @@ const StudentEntryModal = ({ isOpen, onClose, onSuccess, schoolId, classId }) =>
     e.preventDefault();
     setError('');
 
-    if (!formData.firstName || !formData.lastName || !formData.studentIdNumber) {
+    if (!formData.firstName || !formData.lastName) {
       setError('Please fill in all required fields');
       return;
     }
@@ -115,7 +115,7 @@ const StudentEntryModal = ({ isOpen, onClose, onSuccess, schoolId, classId }) =>
 
           <div>
             <label htmlFor="studentIdNumber" className="block text-sm font-medium text-gray-700 mb-2">
-              Student ID Number *
+              Student ID Number <span className="text-gray-400 font-normal">(optional — auto-generated if blank)</span>
             </label>
             <input
               id="studentIdNumber"
@@ -123,7 +123,6 @@ const StudentEntryModal = ({ isOpen, onClose, onSuccess, schoolId, classId }) =>
               type="text"
               value={formData.studentIdNumber}
               onChange={handleChange}
-              required
               className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="e.g., 2024-001"
             />

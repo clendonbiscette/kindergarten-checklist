@@ -31,49 +31,60 @@ export const createAssessment = async (req, res, next) => {
 
     const teacherId = req.user.userId;
 
-    // Create assessment
-    const assessment = await prisma.assessment.create({
-      data: {
-        studentId,
-        learningOutcomeId,
-        teacherId,
-        termId,
-        assessmentDate: new Date(assessmentDate),
-        rating,
-        comment: comment || null,
-        createdBy: teacherId,
+    const include = {
+      student: {
+        select: { id: true, firstName: true, lastName: true },
       },
-      include: {
-        student: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        learningOutcome: {
-          select: {
-            id: true,
-            code: true,
-            description: true,
-            strand: {
-              select: {
-                name: true,
-              },
-            },
-            subject: {
-              select: {
-                name: true,
-              },
-            },
-          },
+      learningOutcome: {
+        select: {
+          id: true,
+          code: true,
+          description: true,
+          strand: { select: { name: true } },
+          subject: { select: { name: true } },
         },
       },
+    };
+
+    // Upsert: update existing assessment for this student+outcome+term, or create new
+    const existing = await prisma.assessment.findFirst({
+      where: { studentId, learningOutcomeId, termId },
+      select: { id: true },
     });
 
-    res.status(201).json({
+    let assessment;
+    let isUpdate = false;
+    if (existing) {
+      isUpdate = true;
+      assessment = await prisma.assessment.update({
+        where: { id: existing.id },
+        data: {
+          rating,
+          comment: comment || null,
+          assessmentDate: new Date(assessmentDate),
+          updatedBy: teacherId,
+        },
+        include,
+      });
+    } else {
+      assessment = await prisma.assessment.create({
+        data: {
+          studentId,
+          learningOutcomeId,
+          teacherId,
+          termId,
+          assessmentDate: new Date(assessmentDate),
+          rating,
+          comment: comment || null,
+          createdBy: teacherId,
+        },
+        include,
+      });
+    }
+
+    res.status(isUpdate ? 200 : 201).json({
       success: true,
-      message: 'Assessment created successfully',
+      message: isUpdate ? 'Assessment updated successfully' : 'Assessment created successfully',
       data: assessment,
     });
   } catch (error) {
@@ -290,29 +301,14 @@ export const getTermAssessments = async (req, res, next) => {
     const { role, userId } = req.user;
 
     if (role !== 'SUPERUSER') {
-      if (role === 'COUNTRY_ADMIN') {
-        const countryAssignments = await prisma.userAssignment.findMany({
-          where: { userId, countryId: { not: null } },
-          select: { countryId: true },
-        });
-        const userCountryIds = countryAssignments.map(a => a.countryId);
-        const school = await prisma.school.findUnique({
-          where: { id: term.schoolId },
-          select: { countryId: true },
-        });
-        if (!school || !userCountryIds.includes(school.countryId)) {
-          return res.status(403).json({ success: false, message: 'You do not have access to this term.' });
-        }
-      } else {
-        // SCHOOL_ADMIN and TEACHER: must be assigned to the school
-        const schoolAssignments = await prisma.userAssignment.findMany({
-          where: { userId, schoolId: { not: null } },
-          select: { schoolId: true },
-        });
-        const userSchoolIds = schoolAssignments.map(a => a.schoolId);
-        if (!userSchoolIds.includes(term.schoolId)) {
-          return res.status(403).json({ success: false, message: 'You do not have access to this term.' });
-        }
+      // TEACHER: must be assigned to the school
+      const schoolAssignments = await prisma.userAssignment.findMany({
+        where: { userId, schoolId: { not: null } },
+        select: { schoolId: true },
+      });
+      const userSchoolIds = schoolAssignments.map(a => a.schoolId);
+      if (!userSchoolIds.includes(term.schoolId)) {
+        return res.status(403).json({ success: false, message: 'You do not have access to this term.' });
       }
     }
 

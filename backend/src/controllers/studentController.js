@@ -125,6 +125,7 @@ export const createStudent = async (req, res, next) => {
       firstName,
       lastName,
       dateOfBirth,
+      studentIdNumber,
       schoolId,
       classId,
     } = req.body;
@@ -145,10 +146,14 @@ export const createStudent = async (req, res, next) => {
       });
     }
 
-    // Always auto-generate student ID — uniform, no teacher input required
-    const timestamp = Date.now().toString(36).toUpperCase();
-    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const studentIdNumber = `STU-${timestamp}-${random}`;
+    // Use teacher-provided ID if given, otherwise auto-generate
+    if (!studentIdNumber || !studentIdNumber.trim()) {
+      const timestamp = Date.now().toString(36).toUpperCase();
+      const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+      studentIdNumber = `STU-${timestamp}-${random}`;
+    } else {
+      studentIdNumber = studentIdNumber.trim();
+    }
 
     // If classId provided, verify it exists and belongs to the same school
     if (classId) {
@@ -295,6 +300,15 @@ export const updateStudent = async (req, res, next) => {
 export const deleteStudent = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    // Block deletion if the student has any assessment records
+    const assessmentCount = await prisma.assessment.count({ where: { studentId: id } });
+    if (assessmentCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete student with ${assessmentCount} assessment record${assessmentCount !== 1 ? 's' : ''}. Deactivate the student instead to preserve historical data.`,
+      });
+    }
 
     await prisma.student.delete({
       where: { id },

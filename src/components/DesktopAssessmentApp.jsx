@@ -266,6 +266,11 @@ const DesktopAssessmentApp = () => {
     }
   }, []);
 
+  // Reset selected student when class changes (prevents stale student from wrong class)
+  useEffect(() => {
+    setSelectedStudent('');
+  }, [selectedClassId]);
+
   // Smart defaults: Auto-select current/active term
   useEffect(() => {
     if (selectedSchool && !selectedTerm && terms.length > 0) {
@@ -1219,15 +1224,34 @@ const DesktopAssessmentApp = () => {
             title={!selectedClassId ? 'Select a class first' : `Add a new student to ${selectedClassObj?.name}`}
           >
             <UserPlus size={18} />
-            {selectedClassId ? 'Add New Student' : 'Select a Class First'}
+            {selectedClassId ? 'Add Student' : 'Select a Class First'}
+          </button>
+          <button
+            onClick={() => setShowBulkImport(true)}
+            disabled={!selectedClassId}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={!selectedClassId ? 'Select a class first to bulk import' : `Bulk import students from CSV into ${selectedClassObj?.name}`}
+          >
+            <Upload size={18} />
+            {selectedClassId ? 'Bulk Import CSV' : 'Select a Class First'}
           </button>
           <button
             onClick={() => setShowAssignStudentModal(true)}
             disabled={!selectedClassId}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={!selectedClassId ? 'Select a class first' : `Move an existing student into ${selectedClassObj?.name}`}
           >
             <Users size={18} />
-            {selectedClassId ? 'Move Existing Student Here' : 'Select a Class First'}
+            {selectedClassId ? 'Move Student Here' : 'Select a Class First'}
+          </button>
+          <button
+            onClick={() => setShowBulkAssign(true)}
+            disabled={!selectedClassId}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={!selectedClassId ? 'Select a class first to bulk assign' : `Bulk assign students to ${selectedClassObj?.name}`}
+          >
+            <Users size={18} />
+            {selectedClassId ? 'Bulk Assign Students' : 'Select a Class First'}
           </button>
         </div>
 
@@ -1279,7 +1303,9 @@ const DesktopAssessmentApp = () => {
                         e.stopPropagation();
                         handleDeleteClass(classItem.id, classItem.name);
                       }}
-                      className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100"
+                      disabled={(classItem._count?.students || 0) > 0}
+                      title={(classItem._count?.students || 0) > 0 ? `Cannot delete — ${classItem._count.students} student${classItem._count.students !== 1 ? 's' : ''} enrolled. Remove students first.` : 'Delete class'}
+                      className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-50"
                     >
                       <Trash2 size={14} />
                       Delete
@@ -1342,8 +1368,8 @@ const DesktopAssessmentApp = () => {
           </div>
         )}
 
-        {/* Unassigned Students - Teachers can assign to their classes */}
-        {!selectedClassId && students.filter(s => !s.classId).length > 0 && (
+        {/* Unassigned Students - always visible so teachers can always assign them */}
+        {students.filter(s => !s.classId).length > 0 && (
           <div className="bg-white shadow-sm rounded-lg p-4">
             <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
               <Users size={20} />

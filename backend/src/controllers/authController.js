@@ -43,7 +43,10 @@ export const register = async (req, res, next) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Create user — admin-created users are pre-verified
+    // Generate email verification token
+    const emailVerificationToken = randomBytes(32).toString('hex');
+    const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
     const user = await prisma.user.create({
       data: {
         email,
@@ -51,7 +54,9 @@ export const register = async (req, res, next) => {
         firstName,
         lastName,
         role,
-        emailVerified: true,
+        emailVerified: false,
+        emailVerificationToken,
+        emailVerificationExpires,
       },
       select: {
         id: true,
@@ -59,22 +64,20 @@ export const register = async (req, res, next) => {
         firstName: true,
         lastName: true,
         role: true,
-        isActive: true,
-        createdAt: true,
       },
     });
 
-    // Generate token pair (access + refresh)
-    const tokens = generateTokenPair(user.id, user.email, user.role);
+    // Send verification email
+    try {
+      await sendVerificationEmail(email, emailVerificationToken, firstName);
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError);
+      // Don't fail registration — user can request resend
+    }
 
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
-      data: {
-        user,
-        token: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      },
+      message: 'Registration successful! Please check your email to verify your account before logging in.',
     });
   } catch (error) {
     next(error);
