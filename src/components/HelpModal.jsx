@@ -343,9 +343,10 @@ const TABS = [
   { id: 'tickets', label: 'My Tickets', icon: Ticket },
 ];
 
-const HelpModal = ({ onClose }) => {
+const HelpModal = ({ onClose, publicMode = false }) => {
   const [tab, setTab] = useState('faq');
 
+  const visibleTabs = publicMode ? TABS.filter(t => t.id === 'faq') : TABS;
   const switchToTickets = () => setTab('tickets');
 
   return (
@@ -360,38 +361,51 @@ const HelpModal = ({ onClose }) => {
         <div className="flex items-center justify-between px-5 py-4 border-b flex-shrink-0">
           <div className="flex items-center gap-2">
             <HelpCircle size={18} className="text-indigo-600" />
-            <h2 id="help-modal-title" className="font-semibold text-gray-800">Help & Support</h2>
+            <h2 id="help-modal-title" className="font-semibold text-gray-800">
+              {publicMode ? 'Frequently Asked Questions' : 'Help & Support'}
+            </h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Close">
             <X size={18} />
           </button>
         </div>
 
-        {/* Tab bar */}
-        <div className="flex border-b flex-shrink-0">
-          {TABS.map(t => {
-            const Icon = t.icon;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 ${
-                  tab === t.id
-                    ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Icon size={14} />
-                <span className="hidden sm:inline">{t.label}</span>
-                <span className="sm:hidden">{t.id === 'faq' ? 'FAQs' : t.id === 'contact' ? 'Contact' : 'Tickets'}</span>
-              </button>
-            );
-          })}
-        </div>
+        {/* Tab bar — hidden in public mode (only one tab) */}
+        {!publicMode && (
+          <div className="flex border-b flex-shrink-0">
+            {visibleTabs.map(t => {
+              const Icon = t.icon;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 ${
+                    tab === t.id
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <Icon size={14} />
+                  <span className="hidden sm:inline">{t.label}</span>
+                  <span className="sm:hidden">{t.id === 'faq' ? 'FAQs' : t.id === 'contact' ? 'Contact' : 'Tickets'}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-5">
-          {tab === 'faq' && <FaqAccordion />}
+          {tab === 'faq' && (
+            <>
+              <FaqAccordion />
+              {publicMode && (
+                <p className="mt-5 text-center text-xs text-gray-400">
+                  Need more help? Log in and use the <span className="font-medium text-gray-500">Contact Support</span> tab to submit a ticket.
+                </p>
+              )}
+            </>
+          )}
           {tab === 'contact' && <ContactForm onSuccess={switchToTickets} />}
           {tab === 'tickets' && <MyTickets />}
         </div>

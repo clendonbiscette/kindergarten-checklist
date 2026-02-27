@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../api/auth';
 import TeacherRegistration from './TeacherRegistration';
-import { ClipboardCheck, BookOpen, Star } from 'lucide-react';
+import HelpModal from './HelpModal';
+import { ClipboardCheck, BookOpen, Star, HelpCircle } from 'lucide-react';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ const Login = () => {
   const [showRegistration, setShowRegistration] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const { login } = useAuth();
 
   // Auto-open teacher registration when linked via ?register=teacher
@@ -245,11 +247,21 @@ const Login = () => {
           </div>
 
           {/* Footer */}
-          <p className="text-center text-gray-400 text-sm mt-6">
-            Organisation of Eastern Caribbean States
-          </p>
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <p className="text-gray-400 text-sm">Organisation of Eastern Caribbean States</p>
+            <button
+              type="button"
+              onClick={() => setShowHelp(true)}
+              className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#1E3A5F] transition-colors"
+            >
+              <HelpCircle size={15} />
+              Help & FAQs
+            </button>
+          </div>
         </div>
       </div>
+
+      {showHelp && <HelpModal publicMode onClose={() => setShowHelp(false)} />}
     </div>
   );
 };
