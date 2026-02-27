@@ -189,6 +189,7 @@ const DesktopAssessmentApp = () => {
   const [selectedStudent, setSelectedStudent] = useState('');
   const [selectedStrand, setSelectedStrand] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showUnratedOnly, setShowUnratedOnly] = useState(false);
 
   // Assessment state
   const [tempAssessments, setTempAssessments] = useState({});
@@ -325,6 +326,17 @@ const DesktopAssessmentApp = () => {
     // Admins and other roles can see all students
     return students;
   }, [students, classes, user?.role]);
+
+  // Students grouped by class — used to render optgroups in the student picker
+  const studentsByClass = useMemo(() => {
+    const groups = {};
+    accessibleStudents.forEach(s => {
+      const key = s.classId || '__unassigned__';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(s);
+    });
+    return groups;
+  }, [accessibleStudents]);
 
   // Mutations
   const createAssessment = useCreateAssessment();
@@ -521,6 +533,25 @@ const DesktopAssessmentApp = () => {
       .forEach(a => { map[a.learningOutcomeId] = a.rating; });
     return map;
   }, [studentAssessments, selectedTerm]);
+
+  // filteredOutcomes + unrated-only toggle = what actually renders in the outcome list
+  const displayedOutcomes = useMemo(() => {
+    if (!showUnratedOnly) return filteredOutcomes;
+    return filteredOutcomes.filter(o => !termRatingMap[o.id]);
+  }, [filteredOutcomes, termRatingMap, showUnratedOnly]);
+
+  // Per-subject completion counts for the selected student + term
+  // e.g. { subjectId: { rated: 12, total: 45 } }
+  const subjectCompletionMap = useMemo(() => {
+    if (!selectedStudent || !selectedTerm || !allOutcomes.length) return {};
+    const map = {};
+    subjects.forEach(s => {
+      const total = allOutcomes.filter(o => o.subjectId === s.id).length;
+      const rated = allOutcomes.filter(o => o.subjectId === s.id && termRatingMap[o.id]).length;
+      map[s.id] = { rated, total };
+    });
+    return map;
+  }, [subjects, allOutcomes, termRatingMap, selectedStudent, selectedTerm]);
 
   // ratingOverride lets rating buttons pass the value directly (React state batching means
   // tempAssessments won't have updated yet by the time handleSaveAssessment is called)
@@ -979,6 +1010,18 @@ const DesktopAssessmentApp = () => {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={() => setShowUnratedOnly(v => !v)}
+            className={`px-3 py-2 rounded-md text-sm border transition-colors whitespace-nowrap ${
+              showUnratedOnly
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+            }`}
+            title="Toggle between all outcomes and unrated-only"
+          >
+            {showUnratedOnly ? 'Unrated only' : 'Show all'}
+          </button>
         </div>
 
         {/* Rating scale legend — always visible */}
@@ -1034,12 +1077,27 @@ const DesktopAssessmentApp = () => {
 
         {/* Outcomes */}
         <div className="space-y-2">
-          {filteredOutcomes.map(outcome => {
+          {displayedOutcomes.length === 0 && showUnratedOnly && (
+            <div className="flex items-center justify-center h-32 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+              <div className="text-center">
+                <CheckCircle2 className="mx-auto text-green-400 mb-2" size={32} />
+                <p className="text-gray-600 font-medium text-sm">All outcomes rated for this term!</p>
+              </div>
+            </div>
+          )}
+          {displayedOutcomes.map(outcome => {
             const latestAssessment = getLatestAssessment(outcome.id);
             // Optimistic temp state takes priority; falls back to DB-sourced rating for this term
             const currentRating = tempAssessments[outcome.id] || termRatingMap[outcome.id] || null;
+            const savedRating = termRatingMap[outcome.id];
             const isFocused = focusedOutcomeId === outcome.id;
             const justSaved = recentlySavedIds.has(outcome.id);
+
+            // Left border colour indicates existing rating for this term
+            const leftBorder = savedRating === 'EASILY_MEETING' ? 'border-l-4 border-l-green-400'
+              : savedRating === 'MEETING' ? 'border-l-4 border-l-blue-400'
+              : savedRating === 'NEEDS_PRACTICE' ? 'border-l-4 border-l-amber-400'
+              : '';
 
             return (
               <div
@@ -1047,7 +1105,7 @@ const DesktopAssessmentApp = () => {
                 onClick={() => setFocusedOutcomeId(outcome.id)}
                 onFocus={() => setFocusedOutcomeId(outcome.id)}
                 tabIndex={0}
-                className={`rounded-lg p-3 transition-all cursor-pointer ${
+                className={`rounded-lg p-3 transition-all cursor-pointer ${leftBorder} ${
                   justSaved
                     ? 'bg-green-50 ring-2 ring-green-400 shadow-md'
                     : isFocused
@@ -1963,7 +2021,15 @@ const DesktopAssessmentApp = () => {
                       <option value="">
                         {!selectedSchool ? 'Select school first' : accessibleStudents.length === 0 ? (user?.role === 'TEACHER' ? 'No students in your classes' : 'No students enrolled') : `Select student (${accessibleStudents.length})...`}
                       </option>
-                      {accessibleStudents.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                      {Object.entries(studentsByClass).map(([classId, classStudents]) => {
+                        const cls = classes.find(c => c.id === classId);
+                        const groupLabel = cls ? `${cls.name} (${cls.gradeLevel})` : 'Unassigned';
+                        return (
+                          <optgroup key={classId} label={groupLabel}>
+                            {classStudents.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                          </optgroup>
+                        );
+                      })}
                     </select>
                   )}
                 </div>
@@ -1978,7 +2044,11 @@ const DesktopAssessmentApp = () => {
                     <option value="">
                       {subjects.length === 0 ? 'No subjects available' : `Select subject (${subjects.length})...`}
                     </option>
-                    {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {subjects.map(s => {
+                      const comp = subjectCompletionMap[s.id];
+                      const label = comp && comp.total > 0 ? `${s.name} (${comp.rated}/${comp.total})` : s.name;
+                      return <option key={s.id} value={s.id}>{label}</option>;
+                    })}
                   </select>
                 </div>
               </div>
@@ -2005,7 +2075,15 @@ const DesktopAssessmentApp = () => {
                       <option value="">
                         {!selectedSchool ? 'Select school first' : accessibleStudents.length === 0 ? (user?.role === 'TEACHER' ? 'No students in your classes' : 'No students enrolled') : `Select student (${accessibleStudents.length})...`}
                       </option>
-                      {accessibleStudents.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                      {Object.entries(studentsByClass).map(([classId, classStudents]) => {
+                        const cls = classes.find(c => c.id === classId);
+                        const groupLabel = cls ? `${cls.name} (${cls.gradeLevel})` : 'Unassigned';
+                        return (
+                          <optgroup key={classId} label={groupLabel}>
+                            {classStudents.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                          </optgroup>
+                        );
+                      })}
                     </select>
                   )}
                 </div>
