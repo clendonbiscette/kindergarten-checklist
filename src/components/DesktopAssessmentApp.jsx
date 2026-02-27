@@ -28,6 +28,7 @@ import StudentEditModal from './StudentEditModal';
 import BulkImportStudents from './BulkImportStudents';
 import AssignStudentModal from './AssignStudentModal';
 import BulkAssignStudents from './BulkAssignStudents';
+import CreateStudentModal from './CreateStudentModal';
 import AssessmentEditModal from './AssessmentEditModal';
 import ConfirmModal from './ConfirmModal';
 import TeacherWelcome from './TeacherWelcome';
@@ -57,6 +58,7 @@ const DesktopAssessmentApp = () => {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showAssignStudentModal, setShowAssignStudentModal] = useState(false);
   const [showBulkAssign, setShowBulkAssign] = useState(false);
+  const [showCreateStudentModal, setShowCreateStudentModal] = useState(false);
   const [showAssessmentEditModal, setShowAssessmentEditModal] = useState(false);
   const [editingClass, setEditingClass] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -667,9 +669,15 @@ const DesktopAssessmentApp = () => {
             <div className="text-center max-w-sm">
               <Users className="mx-auto text-gray-400 mb-3" size={48} />
               <p className="text-gray-700 font-medium">No students in this class yet</p>
-              <p className="text-sm text-gray-500 mt-1">
-                Ask your School Administrator to add students to your class, or contact your school office.
+              <p className="text-sm text-gray-500 mt-2">
+                Head to <strong>Class Management</strong> to add students to your class.
               </p>
+              <button
+                onClick={() => setCurrentView('class-management')}
+                className="mt-3 px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700"
+              >
+                Go to Class Management
+              </button>
             </div>
           </div>
         );
@@ -1228,20 +1236,21 @@ const DesktopAssessmentApp = () => {
             Create New Class
           </button>
           <button
-            onClick={() => setShowAssignStudentModal(true)}
+            onClick={() => setShowCreateStudentModal(true)}
             disabled={!selectedClassId}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={!selectedClassId ? 'Select a class first' : `Add a new student to ${selectedClassObj?.name}`}
           >
             <UserPlus size={18} />
-            {selectedClassId ? 'Assign Student to Class' : 'Select a Class First'}
+            {selectedClassId ? 'Add New Student' : 'Select a Class First'}
           </button>
           <button
-            onClick={() => setShowBulkAssign(true)}
+            onClick={() => setShowAssignStudentModal(true)}
             disabled={!selectedClassId}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Upload size={18} />
-            {selectedClassId ? 'Bulk Assign Students' : 'Select a Class First'}
+            <Users size={18} />
+            {selectedClassId ? 'Move Existing Student Here' : 'Select a Class First'}
           </button>
         </div>
 
@@ -1333,6 +1342,22 @@ const DesktopAssessmentApp = () => {
                         DOB: {new Date(student.dateOfBirth).toLocaleDateString()}
                       </div>
                     )}
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        onClick={() => handleEditStudent(student)}
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                      >
+                        <Edit2 size={12} />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteStudent(student.id, `${student.firstName} ${student.lastName}`)}
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100"
+                      >
+                        <Trash2 size={12} />
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1824,7 +1849,18 @@ const DesktopAssessmentApp = () => {
         classId={selectedClassId}
       />
 
-      {/* Assign Student Modal - for teachers assigning existing students */}
+      {/* Create Student Modal - teachers add brand-new students to their class */}
+      <CreateStudentModal
+        isOpen={showCreateStudentModal}
+        onClose={() => setShowCreateStudentModal(false)}
+        onSuccess={() => {
+          // Data will auto-refresh via React Query
+        }}
+        classId={selectedClassId}
+        className={selectedClassObj?.name || ''}
+      />
+
+      {/* Assign Student Modal - for moving existing unassigned students into a class */}
       <AssignStudentModal
         isOpen={showAssignStudentModal}
         onClose={() => setShowAssignStudentModal(false)}
