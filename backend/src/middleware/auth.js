@@ -151,9 +151,15 @@ export const verifyStudentAccess = async (req, res, next) => {
       });
     }
 
-    // Teachers can manage any student at their school.
-    // Assessment-level access (verifyAssessmentAccess) handles the
-    // finer-grained "teacher can only record assessments for their own class" rule.
+    // TEACHER: class-level isolation.
+    // Unassigned students (classId = null) are accessible — staging area.
+    // Students assigned to another teacher's class are blocked.
+    if (role === 'TEACHER' && student.classId !== null && student.class?.teacherId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have access to this student.',
+      });
+    }
 
     next();
   } catch (error) {

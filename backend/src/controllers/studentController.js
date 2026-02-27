@@ -23,6 +23,23 @@ export const getStudents = async (req, res, next) => {
       // ...(includeDeleted !== 'true' && { deletedAt: null }),
     };
 
+    // TEACHER: class-level isolation.
+    // When no explicit classId filter is provided, restrict to students in
+    // the teacher's own classes plus unassigned students (staging area).
+    // This mirrors the frontend accessibleStudents filter but enforces it at
+    // the API boundary so raw API calls can't bypass it.
+    if (req.user?.role === 'TEACHER' && classId === undefined) {
+      const teacherClasses = await prisma.class.findMany({
+        where: { teacherId: req.user.userId, schoolId: { in: userSchoolIds } },
+        select: { id: true },
+      });
+      const teacherClassIds = teacherClasses.map(c => c.id);
+      where.OR = [
+        { classId: { in: teacherClassIds } },
+        { classId: null },
+      ];
+    }
+
     const students = await prisma.student.findMany({
       where,
       include: {
