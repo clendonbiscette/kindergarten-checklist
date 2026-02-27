@@ -22,19 +22,19 @@ router.get('/', verifySchoolAccess, getClasses);
 // Get single class with students
 router.get('/:id', verifyClassAccess, getClass);
 
-// Create class (teachers and admins, must have school access)
-router.post('/', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), validateCreateClass, verifySchoolAccess, createClass);
+// Create class
+router.post('/', authorize('TEACHER', 'SUPERUSER'), validateCreateClass, verifySchoolAccess, createClass);
 
-// Update class (teachers and admins, must have class access)
-router.put('/:id', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), validateUpdateClass, verifyClassAccess, updateClass);
+// Update class
+router.put('/:id', authorize('TEACHER', 'SUPERUSER'), validateUpdateClass, verifyClassAccess, updateClass);
 
-// Delete class (teachers can delete their own; admins can delete any within their scope)
-router.delete('/:id', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), verifyClassAccess, deleteClass);
+// Delete class
+router.delete('/:id', authorize('TEACHER', 'SUPERUSER'), verifyClassAccess, deleteClass);
 
-// Add student to class (teachers and admins, must have class access)
-router.post('/:id/students', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), verifyClassAccess, addStudentToClass);
+// Add student to class
+router.post('/:id/students', authorize('TEACHER', 'SUPERUSER'), verifyClassAccess, addStudentToClass);
 
-// Remove student from class (teachers and admins, must have class access)
-router.delete('/:id/students/:studentId', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), verifyClassAccess, removeStudentFromClass);
+// Remove student from class
+router.delete('/:id/students/:studentId', authorize('TEACHER', 'SUPERUSER'), verifyClassAccess, removeStudentFromClass);
 
 export default router;

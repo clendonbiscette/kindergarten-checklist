@@ -179,7 +179,7 @@ export const createUser = async (req, res, next) => {
     }
 
     // Validate role (SUPERUSER cannot be created through this endpoint)
-    const validRoles = ['TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'PARENT_STUDENT'];
+    const validRoles = ['TEACHER', 'PARENT_STUDENT'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
         success: false,
@@ -261,7 +261,7 @@ export const updateUser = async (req, res, next) => {
 
     // Validate role if being changed
     if (role) {
-      const validRoles = ['TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'PARENT_STUDENT'];
+      const validRoles = ['TEACHER', 'PARENT_STUDENT'];
       if (!validRoles.includes(role)) {
         return res.status(400).json({
           success: false,

@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePublicSchools, useCountries } from '../hooks/useSchools';
+import { schoolsAPI } from '../api/schools';
 
 const PendingAssignment = () => {
   const { user, logout, assignSchool, refreshUser } = useAuth();
@@ -9,8 +11,14 @@ const PendingAssignment = () => {
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
   const [schoolSearch, setSchoolSearch] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
-  const [isChecking, setIsChecking] = useState(false);
   const [error, setError] = useState('');
+
+  // "Add my school" form state
+  const [showAddSchool, setShowAddSchool] = useState(false);
+  const [newSchoolName, setNewSchoolName] = useState('');
+  const [newSchoolCountryId, setNewSchoolCountryId] = useState(user?.countryId || '');
+  const [isCreating, setIsCreating] = useState(false);
+  const [addSchoolError, setAddSchoolError] = useState('');
 
   const { data: allSchools = [] } = usePublicSchools({});
 
@@ -37,17 +45,26 @@ const PendingAssignment = () => {
     }
   };
 
-  const handleCheckAgain = async () => {
-    setIsChecking(true);
-    setError('');
+  const handleCreateSchool = async (e) => {
+    e.preventDefault();
+    setAddSchoolError('');
+    if (!newSchoolName.trim()) {
+      setAddSchoolError('School name is required.');
+      return;
+    }
+    if (!newSchoolCountryId) {
+      setAddSchoolError('Please select a country.');
+      return;
+    }
+    setIsCreating(true);
     try {
-      const result = await refreshUser();
-      if (!result.success || !result.user?.schoolId) {
-        setError('Still no school assignment found. You can select your school below.');
-      }
-      // If refreshUser finds a schoolId, user state updates → App.jsx re-renders automatically
-    } finally {
-      setIsChecking(false);
+      await schoolsAPI.create({ name: newSchoolName.trim(), countryId: newSchoolCountryId });
+      // Backend auto-creates UserAssignment — refresh profile to pick up new schoolId
+      await refreshUser();
+      // App.jsx will re-render automatically once user.schoolId is set
+    } catch (err) {
+      setAddSchoolError(err.message || 'Failed to create school. Please try again.');
+      setIsCreating(false);
     }
   };
 
@@ -57,16 +74,10 @@ const PendingAssignment = () => {
         <div className="p-8">
           <img src="/images/logo.png" alt="OECS Logo" className="h-16 object-contain mx-auto mb-6" />
 
-          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-
           <h2 className="text-xl font-bold text-gray-800 mb-1 text-center">
             Welcome, {user?.firstName}!
           </h2>
-          <p className="text-gray-500 text-sm text-center mb-6">Your account is active and verified.</p>
+          <p className="text-gray-500 text-sm text-center mb-6">Let's set up your classroom. Which school do you teach at?</p>
 
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -75,9 +86,7 @@ const PendingAssignment = () => {
           )}
 
           {/* School picker */}
-          <div className="space-y-3 mb-6">
-            <p className="text-sm font-medium text-gray-700">Select your school to get started:</p>
-
+          <div className="space-y-3 mb-4">
             <select
               value={selectedCountryId}
               onChange={e => { setSelectedCountryId(e.target.value); setSelectedSchoolId(''); setSchoolSearch(''); }}
@@ -116,21 +125,56 @@ const PendingAssignment = () => {
               disabled={!selectedSchoolId || isAssigning}
               className="w-full bg-[#1E3A5F] text-white py-2.5 px-4 rounded-lg hover:bg-[#2D4A6F] font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isAssigning ? 'Assigning...' : 'Assign me to this school'}
+              {isAssigning ? 'Setting up...' : 'Start with this school'}
             </button>
           </div>
 
-          <div className="border-t pt-4 space-y-2">
-            <p className="text-xs text-gray-400 text-center mb-2">
-              Already been assigned by an administrator?
-            </p>
+          {/* Add my school */}
+          <div className="border-t pt-4">
             <button
-              onClick={handleCheckAgain}
-              disabled={isChecking}
-              className="w-full bg-gray-100 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-200 font-medium transition-colors text-sm disabled:opacity-50"
+              onClick={() => { setShowAddSchool(!showAddSchool); setAddSchoolError(''); }}
+              className="w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 py-1 transition-colors"
             >
-              {isChecking ? 'Checking...' : 'Check Again'}
+              {showAddSchool ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              My school isn't listed — add it
             </button>
+
+            {showAddSchool && (
+              <form onSubmit={handleCreateSchool} className="mt-3 space-y-3">
+                {addSchoolError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    {addSchoolError}
+                  </div>
+                )}
+                <select
+                  value={newSchoolCountryId}
+                  onChange={e => setNewSchoolCountryId(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:border-[#1E3A5F] focus:outline-none"
+                >
+                  <option value="">Select country...</option>
+                  {countries.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={newSchoolName}
+                  onChange={e => setNewSchoolName(e.target.value)}
+                  placeholder="School name"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:border-[#1E3A5F] focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={isCreating}
+                  className="w-full bg-[#1E3A5F] text-white py-2.5 px-4 rounded-lg hover:bg-[#2D4A6F] font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCreating ? 'Adding school...' : 'Add school & continue'}
+                </button>
+              </form>
+            )}
+          </div>
+
+          <div className="mt-4 pt-4 border-t">
             <button
               onClick={logout}
               className="w-full text-gray-400 py-2 px-4 rounded-lg hover:text-gray-600 font-medium transition-colors text-sm"

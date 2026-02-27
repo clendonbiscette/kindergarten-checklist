@@ -15,8 +15,8 @@ const router = express.Router();
 // All assessment routes require authentication
 router.use(authenticate);
 
-// Create assessment (teachers and admins) - student access verified
-router.post('/', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), validateCreateAssessment, verifyStudentAccess, createAssessment);
+// Create assessment
+router.post('/', authorize('TEACHER', 'SUPERUSER'), validateCreateAssessment, verifyStudentAccess, createAssessment);
 
 // Get assessments for a student - verify student belongs to user's school
 router.get('/student/:studentId', validateUuidParam('studentId'), verifyStudentAccess, getStudentAssessments);
@@ -27,10 +27,10 @@ router.get('/student/:studentId/outcome/:outcomeId', validateUuidParam('studentI
 // Get assessments by term (for class reports)
 router.get('/term/:termId', validateUuidParam('termId'), getTermAssessments);
 
-// Update assessment (teachers and admins) - verify assessment ownership
-router.put('/:id', authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), validateUpdateAssessment, verifyAssessmentAccess, updateAssessment);
+// Update assessment
+router.put('/:id', authorize('TEACHER', 'SUPERUSER'), validateUpdateAssessment, verifyAssessmentAccess, updateAssessment);
 
-// Delete assessment (teachers and admins) - verify assessment ownership
-router.delete('/:id', validateUuidParam('id'), authorize('TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN'), verifyAssessmentAccess, deleteAssessment);
+// Delete assessment
+router.delete('/:id', validateUuidParam('id'), authorize('TEACHER', 'SUPERUSER'), verifyAssessmentAccess, deleteAssessment);
 
 export default router;

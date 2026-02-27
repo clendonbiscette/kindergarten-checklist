@@ -77,7 +77,32 @@ export const getTerm = async (req, res, next) => {
 // Create term
 export const createTerm = async (req, res, next) => {
   try {
-    const { name, schoolYear, startDate, endDate, schoolId } = req.body;
+    let { name, schoolYear, startDate, endDate, schoolId } = req.body;
+
+    // Teachers: auto-derive schoolId from their UserAssignment
+    if (req.user.role === 'TEACHER') {
+      if (!schoolId) {
+        const assignment = await prisma.userAssignment.findFirst({
+          where: { userId: req.user.userId, schoolId: { not: null } },
+          select: { schoolId: true },
+        });
+        schoolId = assignment?.schoolId ?? null;
+      } else {
+        // Verify teacher isn't injecting a different school's ID
+        const userSchoolIds = (
+          await prisma.userAssignment.findMany({
+            where: { userId: req.user.userId, schoolId: { not: null } },
+            select: { schoolId: true },
+          })
+        ).map(a => a.schoolId);
+        if (!userSchoolIds.includes(schoolId)) {
+          return res.status(403).json({
+            success: false,
+            message: 'You can only create terms for your own school.',
+          });
+        }
+      }
+    }
 
     if (!name || !schoolYear || !startDate || !endDate || !schoolId) {
       return res.status(400).json({
@@ -129,6 +154,23 @@ export const updateTerm = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, schoolYear, startDate, endDate } = req.body;
+
+    // Teachers can only update terms for their own school
+    if (req.user.role === 'TEACHER') {
+      const term = await prisma.academicTerm.findUnique({ where: { id }, select: { schoolId: true } });
+      if (!term) {
+        return res.status(404).json({ success: false, message: 'Term not found' });
+      }
+      const userSchoolIds = (
+        await prisma.userAssignment.findMany({
+          where: { userId: req.user.userId, schoolId: { not: null } },
+          select: { schoolId: true },
+        })
+      ).map(a => a.schoolId);
+      if (!userSchoolIds.includes(term.schoolId)) {
+        return res.status(403).json({ success: false, message: 'You do not have access to this term.' });
+      }
+    }
 
     // Validate dates if both provided
     if (startDate && endDate) {
@@ -197,6 +239,19 @@ export const deleteTerm = async (req, res, next) => {
         success: false,
         message: 'Term not found',
       });
+    }
+
+    // Teachers can only delete terms for their own school
+    if (req.user.role === 'TEACHER') {
+      const userSchoolIds = (
+        await prisma.userAssignment.findMany({
+          where: { userId: req.user.userId, schoolId: { not: null } },
+          select: { schoolId: true },
+        })
+      ).map(a => a.schoolId);
+      if (!userSchoolIds.includes(term.schoolId)) {
+        return res.status(403).json({ success: false, message: 'You do not have access to this term.' });
+      }
     }
 
     if (term._count.assessments > 0) {

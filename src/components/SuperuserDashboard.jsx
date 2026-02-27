@@ -159,8 +159,6 @@ const SuperuserDashboard = () => {
   const getRoleBadgeColor = (role) => {
     const colors = {
       SUPERUSER: 'bg-purple-100 text-purple-800',
-      SCHOOL_ADMIN: 'bg-blue-100 text-blue-800',
-      COUNTRY_ADMIN: 'bg-green-100 text-green-800',
       TEACHER: 'bg-gray-100 text-gray-800',
       PARENT_STUDENT: 'bg-amber-100 text-amber-800',
     };
@@ -275,8 +273,6 @@ const SuperuserDashboard = () => {
           >
             <option value="">All Roles</option>
             <option value="SUPERUSER">Superuser</option>
-            <option value="SCHOOL_ADMIN">School Admin</option>
-            <option value="COUNTRY_ADMIN">Country Admin</option>
             <option value="TEACHER">Teacher</option>
           </select>
           <button
@@ -911,7 +907,7 @@ const CreateUserModal = ({ onClose, onSubmit, isLoading }) => {
     lastName: '',
     email: '',
     password: '',
-    role: 'SCHOOL_ADMIN',
+    role: 'TEACHER',
   });
   const [error, setError] = useState('');
 
@@ -990,8 +986,6 @@ const CreateUserModal = ({ onClose, onSubmit, isLoading }) => {
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
               className="w-full px-3 py-2 border border-gray-200 rounded-md"
             >
-              <option value="SCHOOL_ADMIN">School Admin</option>
-              <option value="COUNTRY_ADMIN">Country Admin</option>
               <option value="TEACHER">Teacher</option>
             </select>
           </div>
@@ -1084,8 +1078,6 @@ const EditUserModal = ({ user, onClose, onSubmit, isLoading }) => {
               className="w-full px-3 py-2 border border-gray-200 rounded-md"
               disabled={user.role === 'SUPERUSER'}
             >
-              <option value="SCHOOL_ADMIN">School Admin</option>
-              <option value="COUNTRY_ADMIN">Country Admin</option>
               <option value="TEACHER">Teacher</option>
             </select>
           </div>

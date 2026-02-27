@@ -12,24 +12,6 @@ const getSchoolIdsForUser = async (userId) => {
   return assignments.map(a => a.schoolId);
 };
 
-// Returns all countryIds a COUNTRY_ADMIN is assigned to
-const getCountryIdsForUser = async (userId) => {
-  const assignments = await prisma.userAssignment.findMany({
-    where: { userId, countryId: { not: null } },
-    select: { countryId: true },
-  });
-  return assignments.map(a => a.countryId);
-};
-
-// Given a schoolId, returns that school's countryId (or null)
-const getSchoolCountryId = async (schoolId) => {
-  const school = await prisma.school.findUnique({
-    where: { id: schoolId },
-    select: { countryId: true },
-  });
-  return school?.countryId ?? null;
-};
-
 // ─── authenticate ────────────────────────────────────────────────────────────
 
 export const authenticate = async (req, res, next) => {
@@ -88,8 +70,7 @@ export const authorize = (...allowedRoles) => {
 
 // ─── verifySchoolAccess ──────────────────────────────────────────────────────
 // SUPERUSER: unrestricted.
-// COUNTRY_ADMIN: can only access schools within their assigned countries.
-// SCHOOL_ADMIN / TEACHER: can only access schools they are directly assigned to.
+// TEACHER: can only access schools they are directly assigned to.
 
 export const verifySchoolAccess = async (req, res, next) => {
   try {
@@ -101,27 +82,7 @@ export const verifySchoolAccess = async (req, res, next) => {
 
     const schoolId = req.params.id || req.params.schoolId || req.body?.schoolId || req.query.schoolId;
 
-    if (role === 'COUNTRY_ADMIN') {
-      const userCountryIds = await getCountryIdsForUser(userId);
-      req.userCountryIds = userCountryIds;
-
-      if (!schoolId) {
-        // No specific school requested — controller will filter by country
-        return next();
-      }
-
-      const schoolCountryId = await getSchoolCountryId(schoolId);
-      if (!schoolCountryId || !userCountryIds.includes(schoolCountryId)) {
-        return res.status(403).json({
-          success: false,
-          message: 'This school is not in your assigned country.',
-        });
-      }
-
-      return next();
-    }
-
-    // SCHOOL_ADMIN and TEACHER: direct school assignment check
+    // TEACHER: direct school assignment check
     const userSchoolIds = await getSchoolIdsForUser(userId);
     req.userSchoolIds = userSchoolIds;
 
@@ -179,22 +140,7 @@ export const verifyStudentAccess = async (req, res, next) => {
       });
     }
 
-    if (role === 'COUNTRY_ADMIN') {
-      const userCountryIds = await getCountryIdsForUser(userId);
-      req.userCountryIds = userCountryIds;
-
-      const schoolCountryId = await getSchoolCountryId(student.schoolId);
-      if (!schoolCountryId || !userCountryIds.includes(schoolCountryId)) {
-        return res.status(403).json({
-          success: false,
-          message: 'You do not have access to this student.',
-        });
-      }
-
-      return next();
-    }
-
-    // SCHOOL_ADMIN and TEACHER
+    // TEACHER: direct school assignment check
     const userSchoolIds = await getSchoolIdsForUser(userId);
     req.userSchoolIds = userSchoolIds;
 
@@ -247,22 +193,7 @@ export const verifyClassAccess = async (req, res, next) => {
       });
     }
 
-    if (role === 'COUNTRY_ADMIN') {
-      const userCountryIds = await getCountryIdsForUser(userId);
-      req.userCountryIds = userCountryIds;
-
-      const schoolCountryId = await getSchoolCountryId(classData.schoolId);
-      if (!schoolCountryId || !userCountryIds.includes(schoolCountryId)) {
-        return res.status(403).json({
-          success: false,
-          message: 'This class is not in your assigned country.',
-        });
-      }
-
-      return next();
-    }
-
-    // SCHOOL_ADMIN and TEACHER
+    // TEACHER: direct school assignment check
     const userSchoolIds = await getSchoolIdsForUser(userId);
     req.userSchoolIds = userSchoolIds;
 
@@ -273,7 +204,7 @@ export const verifyClassAccess = async (req, res, next) => {
       });
     }
 
-    // For teachers, verify they are assigned to this class
+    // Teachers can only access their own classes
     if (role === 'TEACHER' && classData.teacherId !== userId) {
       return res.status(403).json({
         success: false,
@@ -322,22 +253,7 @@ export const verifyAssessmentAccess = async (req, res, next) => {
       });
     }
 
-    if (role === 'COUNTRY_ADMIN') {
-      const userCountryIds = await getCountryIdsForUser(userId);
-      req.userCountryIds = userCountryIds;
-
-      const schoolCountryId = await getSchoolCountryId(assessment.student.schoolId);
-      if (!schoolCountryId || !userCountryIds.includes(schoolCountryId)) {
-        return res.status(403).json({
-          success: false,
-          message: 'You do not have access to this assessment.',
-        });
-      }
-
-      return next();
-    }
-
-    // SCHOOL_ADMIN and TEACHER
+    // TEACHER: direct school assignment check
     const userSchoolIds = await getSchoolIdsForUser(userId);
     req.userSchoolIds = userSchoolIds;
 

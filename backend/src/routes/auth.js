@@ -2,7 +2,7 @@ import express from 'express';
 import {
   register, login, getProfile, registerTeacher, refreshToken,
   verifyEmail, resendVerification, forgotPassword, resetPassword,
-  assignSchool, createSchoolAdmin, changePassword,
+  assignSchool, createTeacher, changePassword,
 } from '../controllers/authController.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import {
@@ -30,6 +30,6 @@ router.post('/reset-password', validateResetPassword, resetPassword);
 router.get('/profile', authenticate, getProfile);
 router.post('/change-password', authenticate, changePassword);
 router.post('/assign-school', authenticate, authorize('TEACHER'), assignSchool);
-router.post('/create-school-admin', authenticate, authorize('SUPERUSER', 'COUNTRY_ADMIN', 'SCHOOL_ADMIN'), createSchoolAdmin);
+router.post('/create-teacher', authenticate, authorize('SUPERUSER'), createTeacher);
 
 export default router;

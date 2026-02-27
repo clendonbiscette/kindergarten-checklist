@@ -44,7 +44,7 @@ export const validateRegister = [
     .isLength({ max: 100 })
     .withMessage('Last name must not exceed 100 characters'),
   body('role')
-    .isIn(['TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'PARENT_STUDENT'])
+    .isIn(['TEACHER', 'PARENT_STUDENT'])
     .withMessage('Invalid role'),
   handleValidationErrors,
 ];

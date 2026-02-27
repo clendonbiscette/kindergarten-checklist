@@ -20,14 +20,14 @@ router.get('/', getTerms);
 // Get single term
 router.get('/:id', getTerm);
 
-// Create term (admins only)
-router.post('/', authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'), createTerm);
+// Create term (teachers create terms for their school; SUPERUSER can create for any school)
+router.post('/', authorize('TEACHER', 'SUPERUSER'), createTerm);
 
-// Update term (admins only)
-router.put('/:id', authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'), updateTerm);
+// Update term
+router.put('/:id', authorize('TEACHER', 'SUPERUSER'), updateTerm);
 
-// Delete term (admins only)
-router.delete('/:id', authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'), deleteTerm);
+// Delete term
+router.delete('/:id', authorize('TEACHER', 'SUPERUSER'), deleteTerm);
 
 // Bulk-create the same term across multiple schools (Superuser only)
 router.post('/bulk', authorize('SUPERUSER'), bulkCreateTerms);

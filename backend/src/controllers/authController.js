@@ -19,7 +19,7 @@ export const register = async (req, res, next) => {
     }
 
     // Validate role
-    const validRoles = ['TEACHER', 'SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'PARENT_STUDENT'];
+    const validRoles = ['TEACHER', 'PARENT_STUDENT'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
         success: false,
@@ -486,7 +486,7 @@ export const resetPassword = async (req, res, next) => {
 
 // Create a School Admin account and assign them to a school
 // Protected: COUNTRY_ADMIN, SCHOOL_ADMIN, SUPERUSER
-export const createSchoolAdmin = async (req, res, next) => {
+export const createTeacher = async (req, res, next) => {
   try {
     const { firstName, lastName, email, schoolId } = req.body;
     const { role: requesterRole, userId: requesterId } = req.user;
@@ -502,32 +502,6 @@ export const createSchoolAdmin = async (req, res, next) => {
     const school = await prisma.school.findUnique({ where: { id: schoolId } });
     if (!school) {
       return res.status(404).json({ success: false, message: 'School not found' });
-    }
-
-    // COUNTRY_ADMIN scope: can only create admins for schools in their assigned countries
-    if (requesterRole === 'COUNTRY_ADMIN') {
-      const countryAssignment = await prisma.userAssignment.findFirst({
-        where: { userId: requesterId, countryId: school.countryId },
-      });
-      if (!countryAssignment) {
-        return res.status(403).json({
-          success: false,
-          message: 'You are not authorized to create admins for this school.',
-        });
-      }
-    }
-
-    // SCHOOL_ADMIN scope: can only create admins for their own school
-    if (requesterRole === 'SCHOOL_ADMIN') {
-      const schoolAssignment = await prisma.userAssignment.findFirst({
-        where: { userId: requesterId, schoolId },
-      });
-      if (!schoolAssignment) {
-        return res.status(403).json({
-          success: false,
-          message: 'You are not authorized to create admins for this school.',
-        });
-      }
     }
 
     // Check email uniqueness
@@ -555,7 +529,7 @@ export const createSchoolAdmin = async (req, res, next) => {
           passwordHash,
           firstName,
           lastName,
-          role: 'SCHOOL_ADMIN',
+          role: 'TEACHER',
           emailVerified: true,
           passwordResetToken,
           passwordResetExpires,

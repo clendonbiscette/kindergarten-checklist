@@ -57,10 +57,10 @@ router.get(
   getClassSummary
 );
 
-// School summary - School Admins only
+// School summary
 router.get(
   '/school/:schoolId/summary',
-  authorize('SCHOOL_ADMIN', 'COUNTRY_ADMIN', 'SUPERUSER'),
+  authorize('TEACHER', 'SUPERUSER'),
   validateUuidParam('schoolId'),
   verifySchoolAccess,
   getSchoolSummary

@@ -49,14 +49,16 @@ describe('Admin routes — SUPERUSER-only guard', () => {
     expect(res.status).toBe(403);
   });
 
-  it('returns 403 when a SCHOOL_ADMIN hits GET /api/admin/users', async () => {
+  it('returns 403 when a SCHOOL_ADMIN role string hits GET /api/admin/users', async () => {
+    // This role no longer exists in the system but the authorize() guard should
+    // still correctly reject any token that doesn't carry SUPERUSER role.
     const res = await request(app)
       .get('/api/admin/users')
       .set('Authorization', authHeader('SCHOOL_ADMIN'));
     expect(res.status).toBe(403);
   });
 
-  it('returns 403 when a COUNTRY_ADMIN hits GET /api/admin/users', async () => {
+  it('returns 403 when a COUNTRY_ADMIN role string hits GET /api/admin/users', async () => {
     const res = await request(app)
       .get('/api/admin/users')
       .set('Authorization', authHeader('COUNTRY_ADMIN'));
@@ -66,23 +68,5 @@ describe('Admin routes — SUPERUSER-only guard', () => {
   it('returns 401 when no token is provided', async () => {
     const res = await request(app).get('/api/admin/users');
     expect(res.status).toBe(401);
-  });
-});
-
-describe('School Admin routes — role guard', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('returns 403 when a TEACHER hits GET /api/schools/my-school', async () => {
-    const res = await request(app)
-      .get('/api/schools/my-school')
-      .set('Authorization', authHeader('TEACHER'));
-    expect(res.status).toBe(403);
-  });
-
-  it('returns 403 when a COUNTRY_ADMIN hits GET /api/schools/my-school', async () => {
-    const res = await request(app)
-      .get('/api/schools/my-school')
-      .set('Authorization', authHeader('COUNTRY_ADMIN'));
-    expect(res.status).toBe(403);
   });
 });

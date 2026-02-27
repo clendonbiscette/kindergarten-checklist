@@ -162,10 +162,10 @@ export const createClass = async (req, res, next) => {
       });
     }
 
-    if (teacher.role !== 'TEACHER' && teacher.role !== 'SCHOOL_ADMIN') {
+    if (teacher.role !== 'TEACHER') {
       return res.status(400).json({
         success: false,
-        message: 'User must have TEACHER or SCHOOL_ADMIN role',
+        message: 'User must have TEACHER role',
       });
     }
 
@@ -242,10 +242,10 @@ export const updateClass = async (req, res, next) => {
         });
       }
 
-      if (teacher.role !== 'TEACHER' && teacher.role !== 'SCHOOL_ADMIN') {
+      if (teacher.role !== 'TEACHER') {
         return res.status(400).json({
           success: false,
-          message: 'User must have TEACHER or SCHOOL_ADMIN role',
+          message: 'User must have TEACHER role',
         });
       }
 
