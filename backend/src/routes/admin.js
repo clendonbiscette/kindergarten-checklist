@@ -12,6 +12,7 @@ import {
   getSchools,
   getStats,
   syncTeacherSchoolAssignments,
+  getAuditLogs,
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -37,6 +38,9 @@ router.get('/schools', getSchools);
 
 // System statistics
 router.get('/stats', getStats);
+
+// Audit logs
+router.get('/audit-logs', getAuditLogs);
 
 // Maintenance - sync teacher-school assignments
 router.post('/sync-teacher-assignments', syncTeacherSchoolAssignments);

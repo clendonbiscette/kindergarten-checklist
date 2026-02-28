@@ -110,3 +110,13 @@ export const useAdminStats = () => {
     select: (data) => data.data,
   });
 };
+
+// Audit logs
+export const useAdminLogs = (params = {}) => {
+  return useQuery({
+    queryKey: ['admin', 'logs', params],
+    queryFn: () => adminAPI.getAuditLogs(params),
+    select: (data) => data.data,
+    staleTime: 30 * 1000,
+  });
+};

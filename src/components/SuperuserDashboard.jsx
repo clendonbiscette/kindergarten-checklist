@@ -12,6 +12,7 @@ import {
   useAdminUsers,
   useAdminSchools,
   useAdminStats,
+  useAdminLogs,
   useCreateUser,
   useUpdateUser,
   useResetUserPassword,
@@ -59,6 +60,11 @@ const SuperuserDashboard = () => {
   const [supportSearch, setSupportSearch] = useState('');
   const [openTicketId, setOpenTicketId] = useState(null);
 
+  // Logs tab state
+  const [logPage, setLogPage] = useState(1);
+  const [logActionFilter, setLogActionFilter] = useState('');
+  const [logDateRange, setLogDateRange] = useState('7d');
+
   // Fetch data
   const { data: stats, isLoading: loadingStats } = useAdminStats();
   const { data: usersData, isLoading: loadingUsers, refetch: refetchUsers } = useAdminUsers({
@@ -79,6 +85,15 @@ const SuperuserDashboard = () => {
     ...(supportStatusFilter && { status: supportStatusFilter }),
     ...(supportCategoryFilter && { category: supportCategoryFilter }),
     ...(supportSearch && { search: supportSearch }),
+  });
+  const logDateFrom = logDateRange !== 'all'
+    ? new Date(Date.now() - parseInt(logDateRange) * 24 * 60 * 60 * 1000).toISOString()
+    : undefined;
+  const { data: logsData, isLoading: loadingLogs, refetch: refetchLogs } = useAdminLogs({
+    page: logPage,
+    limit: 50,
+    ...(logActionFilter && { action: logActionFilter }),
+    ...(logDateFrom && { from: logDateFrom }),
   });
 
   // Mutations
@@ -938,6 +953,181 @@ const SuperuserDashboard = () => {
     );
   };
 
+  const timeAgo = (date) => {
+    const diff = Date.now() - new Date(date).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
+
+  const LOG_ACTION_BADGE = {
+    LOGIN: 'bg-green-100 text-green-700',
+    GOOGLE_LOGIN: 'bg-green-100 text-green-700',
+    REGISTER: 'bg-green-100 text-green-700',
+    REGISTER_TEACHER: 'bg-green-100 text-green-700',
+    GOOGLE_REGISTER: 'bg-green-100 text-green-700',
+    UPDATE_USER: 'bg-blue-100 text-blue-700',
+    ASSIGN_SCHOOL: 'bg-blue-100 text-blue-700',
+    REMOVE_SCHOOL: 'bg-blue-100 text-blue-700',
+    CHANGE_PASSWORD: 'bg-blue-100 text-blue-700',
+    RESET_PASSWORD: 'bg-blue-100 text-blue-700',
+    DEACTIVATE_USER: 'bg-red-100 text-red-700',
+    LOGIN_FAILED: 'bg-red-100 text-red-700',
+    CREATE_USER: 'bg-amber-100 text-amber-700',
+    RESET_PASSWORD_ADMIN: 'bg-amber-100 text-amber-700',
+    FORGOT_PASSWORD: 'bg-amber-100 text-amber-700',
+  };
+
+  const LOG_ACTIONS = [
+    'LOGIN', 'LOGIN_FAILED', 'REGISTER', 'REGISTER_TEACHER',
+    'GOOGLE_LOGIN', 'GOOGLE_REGISTER', 'CHANGE_PASSWORD', 'FORGOT_PASSWORD',
+    'RESET_PASSWORD', 'CREATE_USER', 'UPDATE_USER', 'DEACTIVATE_USER',
+    'RESET_PASSWORD_ADMIN', 'ASSIGN_SCHOOL', 'REMOVE_SCHOOL',
+  ];
+
+  const renderLogs = () => {
+    const logs = logsData?.logs || [];
+    const pagination = logsData?.pagination;
+
+    return (
+      <div className="space-y-4">
+        {/* Toolbar */}
+        <div className="flex flex-wrap gap-3 bg-white p-4 rounded-lg shadow-sm">
+          <div className="flex gap-1 flex-wrap">
+            {[
+              { value: '1', label: 'Today' },
+              { value: '7', label: '7 days' },
+              { value: '30', label: '30 days' },
+              { value: 'all', label: 'All time' },
+            ].map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => { setLogDateRange(value); setLogPage(1); }}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  logDateRange === value
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <select
+            value={logActionFilter}
+            onChange={(e) => { setLogActionFilter(e.target.value); setLogPage(1); }}
+            className="px-3 py-1.5 border border-gray-200 rounded text-sm min-w-[180px]"
+          >
+            <option value="">All actions</option>
+            {LOG_ACTIONS.map(a => (
+              <option key={a} value={a}>{a.replace(/_/g, ' ')}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => refetchLogs()}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 rounded text-sm hover:bg-gray-200 ml-auto"
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
+        </div>
+
+        {/* Table */}
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          {loadingLogs ? (
+            <div className="text-center py-12 text-gray-500">
+              <Loader2 className="animate-spin mx-auto mb-2" size={24} />
+              Loading logs...
+            </div>
+          ) : logs.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Clock size={32} className="mx-auto mb-2 opacity-40" />
+              <p className="font-medium">No log entries yet</p>
+              <p className="text-sm mt-1">Events will appear here after users log in or perform actions.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <th className="px-4 py-3">Time</th>
+                    <th className="px-4 py-3">Action</th>
+                    <th className="px-4 py-3">User</th>
+                    <th className="px-4 py-3 hidden md:table-cell">Target</th>
+                    <th className="px-4 py-3 hidden lg:table-cell">IP Address</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {logs.map((log) => (
+                    <tr key={log.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                        <span title={new Date(log.createdAt).toLocaleString()}>
+                          {timeAgo(log.createdAt)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${LOG_ACTION_BADGE[log.action] || 'bg-gray-100 text-gray-600'}`}>
+                          {log.action.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {log.user
+                          ? <span title={log.user.email}>{log.user.firstName} {log.user.lastName}</span>
+                          : <span className="text-gray-400 italic">
+                              {log.newValues?.email || '—'}
+                            </span>
+                        }
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
+                        <span className="font-mono text-xs">{log.tableName}</span>
+                        {log.newValues?.email && log.user && (
+                          <span className="ml-2 text-gray-400 text-xs">{log.newValues.email}</span>
+                        )}
+                        {log.newValues?.targetEmail && (
+                          <span className="ml-2 text-gray-400 text-xs">{log.newValues.targetEmail}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-400 hidden lg:table-cell font-mono text-xs">
+                        {log.ipAddress || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Pagination */}
+        {pagination && pagination.pages > 1 && (
+          <div className="flex items-center justify-between bg-white px-4 py-3 rounded-lg shadow-sm text-sm text-gray-600">
+            <span>{pagination.total} total entries</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setLogPage(p => Math.max(1, p - 1))}
+                disabled={logPage === 1}
+                className="px-3 py-1 bg-gray-100 rounded disabled:opacity-40 hover:bg-gray-200"
+              >
+                Prev
+              </button>
+              <span>Page {logPage} of {pagination.pages}</span>
+              <button
+                onClick={() => setLogPage(p => Math.min(pagination.pages, p + 1))}
+                disabled={logPage >= pagination.pages}
+                className="px-3 py-1 bg-gray-100 rounded disabled:opacity-40 hover:bg-gray-200"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const navItems = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'users', label: 'Users', icon: Users },
@@ -945,6 +1135,7 @@ const SuperuserDashboard = () => {
     { id: 'students', label: 'Students', icon: BookOpen },
     { id: 'terms', label: 'Terms', icon: Calendar },
     { id: 'support', label: 'Support', icon: HelpCircle },
+    { id: 'logs', label: 'Logs', icon: Clock },
   ];
 
   return (
@@ -1015,6 +1206,7 @@ const SuperuserDashboard = () => {
         {currentView === 'students' && renderStudents()}
         {currentView === 'terms' && renderTerms()}
         {currentView === 'support' && renderSupport()}
+        {currentView === 'logs' && renderLogs()}
       </div>
 
       {/* Create User Modal */}

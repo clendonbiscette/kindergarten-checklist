@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma.js';
+import { createAuditLog } from '../utils/audit.js';
 
 // Get all users with filtering and pagination
 export const getUsers = async (req, res, next) => {
@@ -223,6 +224,9 @@ export const createUser = async (req, res, next) => {
       },
     });
 
+    await createAuditLog({ tableName: 'users', recordId: user.id, action: 'CREATE_USER',
+      newValues: { email: user.email, role: user.role }, userId: req.user.userId, req });
+
     res.status(201).json({
       success: true,
       message: `${role.replace('_', ' ')} created successfully`,
@@ -291,6 +295,11 @@ export const updateUser = async (req, res, next) => {
       },
     });
 
+    await createAuditLog({ tableName: 'users', recordId: id, action: 'UPDATE_USER',
+      oldValues: { firstName: existingUser.firstName, lastName: existingUser.lastName,
+                   role: existingUser.role, isActive: existingUser.isActive },
+      newValues: updateData, userId: req.user.userId, req });
+
     res.status(200).json({
       success: true,
       message: 'User updated successfully',
@@ -343,6 +352,9 @@ export const resetUserPassword = async (req, res, next) => {
       data: { passwordHash },
     });
 
+    await createAuditLog({ tableName: 'users', recordId: id, action: 'RESET_PASSWORD_ADMIN',
+      newValues: { targetEmail: existingUser.email }, userId: req.user.userId, req });
+
     res.status(200).json({
       success: true,
       message: 'Password reset successfully',
@@ -388,6 +400,9 @@ export const deactivateUser = async (req, res, next) => {
         isActive: true,
       },
     });
+
+    await createAuditLog({ tableName: 'users', recordId: id, action: 'DEACTIVATE_USER',
+      newValues: { email: existingUser.email }, userId: req.user.userId, req });
 
     res.status(200).json({
       success: true,
@@ -465,6 +480,9 @@ export const assignUserToSchool = async (req, res, next) => {
       },
     });
 
+    await createAuditLog({ tableName: 'user_assignments', recordId: id, action: 'ASSIGN_SCHOOL',
+      newValues: { schoolId, schoolName: school.name }, userId: req.user.userId, req });
+
     res.status(201).json({
       success: true,
       message: `User assigned to ${school.name} successfully`,
@@ -497,6 +515,9 @@ export const removeUserFromSchool = async (req, res, next) => {
     await prisma.userAssignment.delete({
       where: { id: assignment.id },
     });
+
+    await createAuditLog({ tableName: 'user_assignments', recordId: id, action: 'REMOVE_SCHOOL',
+      newValues: { schoolId }, userId: req.user.userId, req });
 
     res.status(200).json({
       success: true,
@@ -703,6 +724,65 @@ export const getStats = async (req, res, next) => {
           count: item._count._all,
         })),
         schoolsByCountry: schoolsByCountryNamed,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get audit logs with filtering and pagination
+export const getAuditLogs = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 50, action, tableName, userId, from, to } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = Math.min(parseInt(limit), 100);
+
+    const where = {};
+    if (action) where.action = action;
+    if (tableName) where.tableName = tableName;
+    if (userId) where.userId = userId;
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) where.createdAt.lte = new Date(to);
+    }
+
+    const [logs, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      prisma.auditLog.count({ where }),
+    ]);
+
+    // Resolve user names in a single bulk query (AuditLog has no Prisma relation to User)
+    const userIds = [...new Set(logs.map(l => l.userId).filter(Boolean))];
+    const users = userIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, firstName: true, lastName: true, email: true },
+        })
+      : [];
+    const userMap = Object.fromEntries(users.map(u => [u.id, u]));
+
+    const enrichedLogs = logs.map(log => ({
+      ...log,
+      user: log.userId ? (userMap[log.userId] || null) : null,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        logs: enrichedLogs,
+        pagination: {
+          page: parseInt(page),
+          limit: take,
+          total,
+          pages: Math.ceil(total / take),
+        },
       },
     });
   } catch (error) {

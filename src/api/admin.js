@@ -57,4 +57,10 @@ export const adminAPI = {
   getStats: async () => {
     return apiClient.get('/admin/stats');
   },
+
+  // Audit logs
+  getAuditLogs: async (params = {}) => {
+    const queryString = new URLSearchParams(cleanParams(params)).toString();
+    return apiClient.get(`/admin/audit-logs${queryString ? `?${queryString}` : ''}`);
+  },
 };

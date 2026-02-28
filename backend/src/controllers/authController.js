@@ -4,6 +4,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { generateTokenPair, verifyRefreshToken } from '../utils/jwt.js';
 import prisma from '../utils/prisma.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendSchoolAdminInviteEmail } from '../utils/email.js';
+import { createAuditLog } from '../utils/audit.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -75,6 +76,9 @@ export const register = async (req, res, next) => {
       },
     });
 
+    await createAuditLog({ tableName: 'users', recordId: user.id, action: 'REGISTER',
+      newValues: { email, role }, userId: user.id, req });
+
     // Send verification email
     try {
       await sendVerificationEmail(email, emailVerificationToken, firstName);
@@ -122,6 +126,8 @@ export const login = async (req, res, next) => {
     });
 
     if (!user) {
+      await createAuditLog({ tableName: 'users', recordId: 'unknown', action: 'LOGIN_FAILED',
+        newValues: { email, reason: 'user_not_found' }, userId: null, req });
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
@@ -148,6 +154,8 @@ export const login = async (req, res, next) => {
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!isPasswordValid) {
+      await createAuditLog({ tableName: 'users', recordId: user.id, action: 'LOGIN_FAILED',
+        newValues: { email, reason: 'wrong_password' }, userId: null, req });
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
@@ -165,6 +173,9 @@ export const login = async (req, res, next) => {
 
     // Generate token pair (access + refresh)
     const tokens = generateTokenPair(user.id, user.email, user.role);
+
+    await createAuditLog({ tableName: 'users', recordId: user.id, action: 'LOGIN',
+      newValues: { email: user.email, role: user.role }, userId: user.id, req });
 
     // Extract school and country info from assignments
     const schoolAssignment = user.assignments?.find(a => a.school);
@@ -303,7 +314,7 @@ export const registerTeacher = async (req, res, next) => {
     const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Create user and optional assignment in a transaction
-    await prisma.$transaction(async (tx) => {
+    const newTeacher = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           email,
@@ -329,6 +340,9 @@ export const registerTeacher = async (req, res, next) => {
 
       return user;
     });
+
+    await createAuditLog({ tableName: 'users', recordId: newTeacher.id, action: 'REGISTER_TEACHER',
+      newValues: { email }, userId: newTeacher.id, req });
 
     // Send verification email (outside transaction — don't fail registration if email fails)
     const verifyUrl = `${FRONTEND_URL}/verify-email?token=${emailVerificationToken}`;
@@ -450,6 +464,9 @@ export const forgotPassword = async (req, res, next) => {
         data: { passwordResetToken, passwordResetExpires },
       });
 
+      await createAuditLog({ tableName: 'users', recordId: user.id, action: 'FORGOT_PASSWORD',
+        newValues: { email }, userId: null, req });
+
       const resetUrl = `${FRONTEND_URL}/reset-password?token=${passwordResetToken}`;
       try {
         await sendPasswordResetEmail(email, { firstName: user.firstName, resetUrl });
@@ -498,6 +515,9 @@ export const resetPassword = async (req, res, next) => {
         passwordResetExpires: null,
       },
     });
+
+    await createAuditLog({ tableName: 'users', recordId: user.id, action: 'RESET_PASSWORD',
+      userId: user.id, req });
 
     res.status(200).json({
       success: true,
@@ -729,6 +749,9 @@ export const changePassword = async (req, res, next) => {
       data: { passwordHash: hashed },
     });
 
+    await createAuditLog({ tableName: 'users', recordId: req.user.userId,
+      action: 'CHANGE_PASSWORD', userId: req.user.userId, req });
+
     res.status(200).json({ success: true, message: 'Password changed successfully' });
   } catch (error) {
     next(error);
@@ -818,6 +841,7 @@ export const googleAuth = async (req, res, next) => {
       include: userInclude,
     });
 
+    let isNew = false;
     if (user) {
       if (!user.isActive) {
         return res.status(403).json({ success: false, message: 'Account is deactivated. Please contact support.' });
@@ -831,6 +855,7 @@ export const googleAuth = async (req, res, next) => {
         });
       }
     } else {
+      isNew = true;
       // Create new teacher account (Google-verified, no password)
       user = await prisma.user.create({
         data: {
@@ -847,6 +872,10 @@ export const googleAuth = async (req, res, next) => {
     }
 
     const tokens = generateTokenPair(user.id, user.email, user.role);
+
+    await createAuditLog({ tableName: 'users', recordId: user.id,
+      action: isNew ? 'GOOGLE_REGISTER' : 'GOOGLE_LOGIN',
+      newValues: { email: user.email }, userId: user.id, req });
 
     const schoolAssignment = user.assignments?.find((a) => a.school);
     const countryAssignment = user.assignments?.find((a) => a.country);
