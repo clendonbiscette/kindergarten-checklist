@@ -555,15 +555,13 @@ export const getSchools = async (req, res, next) => {
     const schoolStats = {};
     for (const a of allAssignments) {
       if (!schoolStats[a.schoolId]) {
-        schoolStats[a.schoolId] = { adminCount: 0, teacherCount: 0 };
+        schoolStats[a.schoolId] = { teacherCount: 0 };
       }
-      if (a.user.role === 'SCHOOL_ADMIN') schoolStats[a.schoolId].adminCount++;
       if (a.user.role === 'TEACHER') schoolStats[a.schoolId].teacherCount++;
     }
 
     const schoolsWithAdmins = schools.map(school => ({
       ...school,
-      adminCount: schoolStats[school.id]?.adminCount ?? 0,
       teacherCount: schoolStats[school.id]?.teacherCount ?? 0,
     }));
 
@@ -657,7 +655,6 @@ export const getStats = async (req, res, next) => {
     const [
       totalUsers,
       totalTeachers,
-      totalSchoolAdmins,
       totalSchools,
       totalStudents,
       totalAssessments,
@@ -666,18 +663,17 @@ export const getStats = async (req, res, next) => {
     ] = await Promise.all([
       prisma.user.count({ where: { isActive: true } }),
       prisma.user.count({ where: { role: 'TEACHER', isActive: true } }),
-      prisma.user.count({ where: { role: 'SCHOOL_ADMIN', isActive: true } }),
       prisma.school.count(),
       prisma.student.count({ where: { isActive: true } }),
       prisma.assessment.count(),
       prisma.user.groupBy({
         by: ['role'],
         where: { isActive: true },
-        _count: true,
+        _count: { _all: true },
       }),
       prisma.school.groupBy({
         by: ['countryId'],
-        _count: true,
+        _count: { _all: true },
       }),
     ]);
 
@@ -689,7 +685,7 @@ export const getStats = async (req, res, next) => {
 
     const schoolsByCountryNamed = schoolsByCountry.map(item => ({
       country: countryMap[item.countryId] || 'Unknown',
-      count: item._count,
+      count: item._count._all,
     }));
 
     res.status(200).json({
@@ -698,14 +694,13 @@ export const getStats = async (req, res, next) => {
         overview: {
           totalUsers,
           totalTeachers,
-          totalSchoolAdmins,
           totalSchools,
           totalStudents,
           totalAssessments,
         },
         usersByRole: usersByRole.map(item => ({
           role: item.role,
-          count: item._count,
+          count: item._count._all,
         })),
         schoolsByCountry: schoolsByCountryNamed,
       },
