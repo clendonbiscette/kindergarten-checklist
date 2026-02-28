@@ -1,7 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { GoogleLogin } from '@react-oauth/google';
 import { useCountries, usePublicSchools } from '../hooks/useSchools';
 import { ClipboardCheck, BarChart3, FileText } from 'lucide-react';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const getPasswordStrength = (pw) => {
   if (!pw) return null;
@@ -50,7 +53,8 @@ const TeacherRegistration = ({ onBackToLogin }) => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const { registerTeacher } = useAuth();
+  const [googleError, setGoogleError] = useState('');
+  const { registerTeacher, loginWithGoogle } = useAuth();
 
   const { data: countries = [], isLoading: countriesLoading } = useCountries();
   const { data: schools = [], isLoading: schoolsLoading } = usePublicSchools(
@@ -82,6 +86,11 @@ const TeacherRegistration = ({ onBackToLogin }) => {
 
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
       setError('Please fill in all required fields');
+      return;
+    }
+
+    if (!EMAIL_RE.test(formData.email)) {
+      setError('Please enter a valid email address');
       return;
     }
 
@@ -233,9 +242,41 @@ const TeacherRegistration = ({ onBackToLogin }) => {
       <div className="lg:w-[55%] w-full bg-white p-8 lg:p-12 flex items-start justify-center overflow-y-auto">
         <div className="w-full max-w-lg py-4">
           {/* Header */}
-          <div className="mb-8">
+          <div className="mb-6">
             <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 mb-1">Create Account</h2>
             <p className="text-gray-600">Fill in your details to register as a teacher</p>
+          </div>
+
+          {/* Google sign-up */}
+          <div className="mb-6">
+            <GoogleLogin
+              onSuccess={async ({ credential }) => {
+                setGoogleError('');
+                const result = await loginWithGoogle(credential);
+                if (!result.success) {
+                  setGoogleError(result.message || 'Google sign-in failed');
+                }
+                // On success, AuthContext sets the user and App.jsx redirects automatically
+              }}
+              onError={() => setGoogleError('Google sign-in was cancelled or failed')}
+              width="100%"
+              text="signup_with"
+              shape="rectangular"
+              theme="outline"
+            />
+            {googleError && (
+              <p className="mt-2 text-sm text-red-600">{googleError}</p>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-white px-3 text-gray-500">or register with email</span>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">

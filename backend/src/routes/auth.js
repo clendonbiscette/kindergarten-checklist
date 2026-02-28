@@ -2,7 +2,7 @@ import express from 'express';
 import {
   register, login, getProfile, registerTeacher, refreshToken,
   verifyEmail, resendVerification, forgotPassword, resetPassword,
-  assignSchool, createTeacher, changePassword, updateProfile,
+  assignSchool, createTeacher, changePassword, updateProfile, googleAuth,
 } from '../controllers/authController.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import {
@@ -16,6 +16,7 @@ const router = express.Router();
 router.post('/register', validateRegister, register);
 router.post('/register/teacher', validateTeacherRegister, registerTeacher);
 router.post('/login', validateLogin, login);
+router.post('/google', googleAuth);
 router.post('/refresh', validateRefreshToken, refreshToken);
 
 // Email verification

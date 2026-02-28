@@ -79,4 +79,14 @@ export const authAPI = {
   updateProfile: async (data) => {
     return apiClient.put('/auth/profile', data);
   },
+
+  googleLogin: async (credential) => {
+    const response = await apiClient.post('/auth/google', { credential });
+    if (response.success && response.data?.token) {
+      localStorage.setItem('authToken', response.data.token);
+      localStorage.setItem('refreshToken', response.data.refreshToken || '');
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+    }
+    return response;
+  },
 };

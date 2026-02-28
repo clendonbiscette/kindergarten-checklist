@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../api/auth';
+import { GoogleLogin } from '@react-oauth/google';
 import TeacherRegistration from './TeacherRegistration';
 import HelpModal from './HelpModal';
 import { ClipboardCheck, BookOpen, Star, HelpCircle } from 'lucide-react';
@@ -18,7 +19,8 @@ const Login = () => {
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  const { login } = useAuth();
+  const [googleError, setGoogleError] = useState('');
+  const { login, loginWithGoogle } = useAuth();
 
   // Auto-open teacher registration when linked via ?register=teacher
   useEffect(() => {
@@ -225,6 +227,33 @@ const Login = () => {
               Forgot your password?
             </button>
           </form>
+
+          {/* Google Sign-In */}
+          <div className="mt-6">
+            <div className="relative mb-4">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-3 bg-white text-gray-500">or</span>
+              </div>
+            </div>
+            <GoogleLogin
+              onSuccess={async ({ credential }) => {
+                setGoogleError('');
+                const result = await loginWithGoogle(credential);
+                if (!result.success) setGoogleError(result.message || 'Google sign-in failed');
+              }}
+              onError={() => setGoogleError('Google sign-in was cancelled or failed')}
+              width="368"
+              text="continue_with"
+              shape="rectangular"
+              theme="outline"
+            />
+            {googleError && (
+              <p className="mt-2 text-sm text-red-600">{googleError}</p>
+            )}
+          </div>
 
           {/* Registration Link */}
           <div className="mt-8">

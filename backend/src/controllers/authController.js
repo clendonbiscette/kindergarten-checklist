@@ -1,8 +1,11 @@
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
+import { OAuth2Client } from 'google-auth-library';
 import { generateTokenPair, verifyRefreshToken } from '../utils/jwt.js';
 import prisma from '../utils/prisma.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendSchoolAdminInviteEmail } from '../utils/email.js';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
@@ -16,6 +19,11 @@ export const register = async (req, res, next) => {
         success: false,
         message: 'Please provide all required fields: email, password, firstName, lastName, role',
       });
+    }
+
+    // Validate email format
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid email address' });
     }
 
     // Validate role
@@ -125,6 +133,14 @@ export const login = async (req, res, next) => {
       return res.status(403).json({
         success: false,
         message: 'Your account has been deactivated. Please contact an administrator.',
+      });
+    }
+
+    // Guard: Google-only accounts have no password
+    if (!user.passwordHash) {
+      return res.status(400).json({
+        success: false,
+        message: 'This account uses Google Sign-In. Please click "Continue with Google".',
       });
     }
 
@@ -248,6 +264,11 @@ export const registerTeacher = async (req, res, next) => {
         success: false,
         message: 'Please provide all required fields: email, password, firstName, lastName',
       });
+    }
+
+    // Validate email format
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid email address' });
     }
 
     // Check if user already exists
@@ -751,6 +772,104 @@ export const updateProfile = async (req, res, next) => {
     });
 
     res.status(200).json({ success: true, message: 'Profile updated', data: updated });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/* ── Google OAuth ─────────────────────────────────────────────────── */
+export const googleAuth = async (req, res, next) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ success: false, message: 'Google credential required' });
+    }
+
+    // Verify the ID token with Google
+    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const {
+      sub: googleId,
+      email,
+      given_name: firstName,
+      family_name: lastName,
+      email_verified,
+    } = ticket.getPayload();
+
+    if (!email_verified) {
+      return res.status(400).json({ success: false, message: 'Google account email is not verified' });
+    }
+
+    const userInclude = {
+      assignments: {
+        include: {
+          school: { include: { country: true } },
+          country: true,
+        },
+      },
+    };
+
+    // Find by googleId first, then fall back to email (account linking)
+    let user = await prisma.user.findFirst({
+      where: { OR: [{ googleId }, { email }] },
+      include: userInclude,
+    });
+
+    if (user) {
+      if (!user.isActive) {
+        return res.status(403).json({ success: false, message: 'Account is deactivated. Please contact support.' });
+      }
+      // Link Google ID to existing password account
+      if (!user.googleId) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { googleId, emailVerified: true },
+          include: userInclude,
+        });
+      }
+    } else {
+      // Create new teacher account (Google-verified, no password)
+      user = await prisma.user.create({
+        data: {
+          email,
+          firstName: firstName || email.split('@')[0],
+          lastName: lastName || '',
+          role: 'TEACHER',
+          googleId,
+          emailVerified: true,
+          isActive: true,
+        },
+        include: userInclude,
+      });
+    }
+
+    const tokens = generateTokenPair(user.id, user.email, user.role);
+
+    const schoolAssignment = user.assignments?.find((a) => a.school);
+    const countryAssignment = user.assignments?.find((a) => a.country);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Google sign-in successful',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          schoolId: schoolAssignment?.school?.id || null,
+          schoolName: schoolAssignment?.school?.name || null,
+          countryId: schoolAssignment?.school?.country?.id || countryAssignment?.country?.id || null,
+          countryName: schoolAssignment?.school?.country?.name || countryAssignment?.country?.name || null,
+        },
+        token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      },
+    });
   } catch (error) {
     next(error);
   }

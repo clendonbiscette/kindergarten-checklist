@@ -83,6 +83,22 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const loginWithGoogle = async (credential) => {
+    try {
+      const response = await authAPI.googleLogin(credential);
+      if (response.success) {
+        setUser(response.data.user);
+        return { success: true, user: response.data.user };
+      }
+      return { success: false, message: response.message || 'Google sign-in failed' };
+    } catch (error) {
+      return {
+        success: false,
+        message: error?.message || 'Google sign-in failed. Please try again.',
+      };
+    }
+  };
+
   const logout = () => {
     authAPI.logout();
     setUser(null);
@@ -150,6 +166,7 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     registerTeacher,
+    loginWithGoogle,
     logout,
     refreshUser,
     assignSchool,
