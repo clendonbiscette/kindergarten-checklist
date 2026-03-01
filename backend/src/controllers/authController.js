@@ -835,9 +835,21 @@ export const googleAuth = async (req, res, next) => {
       },
     };
 
-    // Find by googleId first, then fall back to email (case-insensitive — Google normalises to lowercase)
+    // Gmail ignores dots in the local part (foo.bar@gmail.com === foobar@gmail.com).
+    // Build a normalized variant so a user who registered as "foobar@gmail.com" is
+    // still matched when Google returns "foo.bar@gmail.com" (and vice-versa).
+    const gmailDomains = ['gmail.com', 'googlemail.com'];
+    const [localPart, domain] = email.split('@');
+    const emailVariants = [{ email: { equals: email, mode: 'insensitive' } }];
+    if (domain && gmailDomains.includes(domain.toLowerCase())) {
+      const dotlessLocal = localPart.replace(/\./g, '');
+      // Match any stored email whose dot-stripped local part equals ours (handles both directions)
+      emailVariants.push({ email: { equals: `${dotlessLocal}@${domain}`, mode: 'insensitive' } });
+    }
+
+    // Find by googleId first, then fall back to email (case-insensitive + Gmail dot-normalised)
     let user = await prisma.user.findFirst({
-      where: { OR: [{ googleId }, { email: { equals: email, mode: 'insensitive' } }] },
+      where: { OR: [{ googleId }, ...emailVariants] },
       include: userInclude,
     });
 
