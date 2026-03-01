@@ -225,6 +225,9 @@ const DesktopAssessmentApp = () => {
   const [tempAssessments, setTempAssessments] = useState({});
   const [tempComments, setTempComments] = useState({});
   const [focusedOutcomeId, setFocusedOutcomeId] = useState(null);
+  // Bridge state: holds saved ratings between success handler clearing tempAssessments
+  // and the React Query refetch populating termRatingMap — prevents visual colour flash
+  const [savedRatings, setSavedRatings] = useState({});
   // Optimistic ratings for "By Outcome" mode — keyed by "outcomeId_studentId"
   // Cleared on term change or on error (success leaves it; DB refetch will match anyway)
   const [tempByOutcomeRatings, setTempByOutcomeRatings] = useState({});
@@ -239,6 +242,20 @@ const DesktopAssessmentApp = () => {
 
   // Clear by-outcome optimistic state whenever the term changes
   useEffect(() => { setTempByOutcomeRatings({}); }, [selectedTerm]);
+
+  // Clear savedRatings entries once termRatingMap has the persisted value
+  useEffect(() => {
+    setSavedRatings(prev => {
+      const toRemove = Object.keys(prev).filter(id => termRatingMap[id] !== undefined);
+      if (toRemove.length === 0) return prev;
+      const next = { ...prev };
+      toRemove.forEach(id => delete next[id]);
+      return next;
+    });
+  }, [termRatingMap]);
+
+  // Reset bridge state on term or student change (stale saved ratings no longer relevant)
+  useEffect(() => { setSavedRatings({}); }, [selectedTerm, selectedStudent]);
 
   // Write draft on every tempAssessments change
   useEffect(() => {
@@ -651,7 +668,9 @@ const DesktopAssessmentApp = () => {
       await createAssessment.mutateAsync(payload);
 
       if (!studentIdOverride) {
-        // By-student mode: clear temp state and show animation
+        // By-student mode: stash the rating in savedRatings so the colour persists
+        // while termRatingMap refetches, then clear the draft temp state
+        setSavedRatings(prev => ({ ...prev, [outcome.id]: rating }));
         const newTemp = { ...tempAssessments };
         delete newTemp[outcome.id];
         setTempAssessments(newTemp);
@@ -1368,7 +1387,7 @@ const DesktopAssessmentApp = () => {
           {displayedOutcomes.map(outcome => {
             const latestAssessment = latestAssessmentByOutcome[outcome.id] || null;
             // Optimistic temp state takes priority; falls back to DB-sourced rating for this term
-            const currentRating = tempAssessments[outcome.id] || termRatingMap[outcome.id] || null;
+            const currentRating = tempAssessments[outcome.id] || savedRatings[outcome.id] || termRatingMap[outcome.id] || null;
             const savedRating = termRatingMap[outcome.id];
             const isFocused = focusedOutcomeId === outcome.id;
             const justSaved = recentlySavedIds.has(outcome.id);
