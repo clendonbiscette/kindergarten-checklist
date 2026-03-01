@@ -243,17 +243,6 @@ const DesktopAssessmentApp = () => {
   // Clear by-outcome optimistic state whenever the term changes
   useEffect(() => { setTempByOutcomeRatings({}); }, [selectedTerm]);
 
-  // Clear savedRatings entries once termRatingMap has the persisted value
-  useEffect(() => {
-    setSavedRatings(prev => {
-      const toRemove = Object.keys(prev).filter(id => termRatingMap[id] !== undefined);
-      if (toRemove.length === 0) return prev;
-      const next = { ...prev };
-      toRemove.forEach(id => delete next[id]);
-      return next;
-    });
-  }, [termRatingMap]);
-
   // Reset bridge state on term or student change (stale saved ratings no longer relevant)
   useEffect(() => { setSavedRatings({}); }, [selectedTerm, selectedStudent]);
 
@@ -591,6 +580,18 @@ const DesktopAssessmentApp = () => {
       .forEach(a => { map[a.learningOutcomeId] = a.rating; });
     return map;
   }, [studentAssessments, selectedTerm]);
+
+  // Clear savedRatings bridge entries once termRatingMap has the persisted value
+  // (must be placed after termRatingMap declaration to avoid TDZ error)
+  useEffect(() => {
+    setSavedRatings(prev => {
+      const toRemove = Object.keys(prev).filter(id => termRatingMap[id] !== undefined);
+      if (toRemove.length === 0) return prev;
+      const next = { ...prev };
+      toRemove.forEach(id => delete next[id]);
+      return next;
+    });
+  }, [termRatingMap]);
 
   // filteredOutcomes + unrated-only toggle = what actually renders in the outcome list
   const displayedOutcomes = useMemo(() => {
