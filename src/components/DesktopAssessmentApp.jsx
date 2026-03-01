@@ -225,6 +225,9 @@ const DesktopAssessmentApp = () => {
   const [tempAssessments, setTempAssessments] = useState({});
   const [tempComments, setTempComments] = useState({});
   const [focusedOutcomeId, setFocusedOutcomeId] = useState(null);
+  // Optimistic ratings for "By Outcome" mode — keyed by "outcomeId_studentId"
+  // Cleared on term change or on error (success leaves it; DB refetch will match anyway)
+  const [tempByOutcomeRatings, setTempByOutcomeRatings] = useState({});
 
   // Draft auto-save — restore banner shown when a saved draft exists
   const [draftBanner, setDraftBanner] = useState(() => {
@@ -233,6 +236,9 @@ const DesktopAssessmentApp = () => {
       return raw ? JSON.parse(raw) : null;
     } catch { return null; }
   });
+
+  // Clear by-outcome optimistic state whenever the term changes
+  useEffect(() => { setTempByOutcomeRatings({}); }, [selectedTerm]);
 
   // Write draft on every tempAssessments change
   useEffect(() => {
@@ -546,12 +552,17 @@ const DesktopAssessmentApp = () => {
     return filtered;
   }, [outcomes, selectedStrand, searchTerm]);
 
-  const getLatestAssessment = (outcomeId) => {
-    const assessments = studentAssessments
-      .filter(a => a.learningOutcomeId === outcomeId)
-      .sort((a, b) => new Date(b.assessmentDate) - new Date(a.assessmentDate));
-    return assessments[0] || null;
-  };
+  // Pre-compute latest assessment per outcome once — avoids O(n×outcomes) filter+sort on every render
+  const latestAssessmentByOutcome = useMemo(() => {
+    const map = {};
+    (studentAssessments || []).forEach(a => {
+      const existing = map[a.learningOutcomeId];
+      if (!existing || new Date(a.assessmentDate) > new Date(existing.assessmentDate)) {
+        map[a.learningOutcomeId] = a;
+      }
+    });
+    return map;
+  }, [studentAssessments]);
 
   // Map of outcomeId → latest saved rating for the selected term (for display after auto-save)
   const termRatingMap = useMemo(() => {
@@ -627,6 +638,8 @@ const DesktopAssessmentApp = () => {
     if (studentIdOverride) {
       if (savingByOutcomeKeys.has(saveKey)) return;
       setSavingByOutcomeKeys(prev => new Set(prev).add(saveKey));
+      // Optimistic update — show colour immediately before API responds
+      setTempByOutcomeRatings(prev => ({ ...prev, [saveKey]: rating }));
     } else {
       if (savingOutcomeIds.has(outcome.id)) return;
       setSavingOutcomeIds(prev => new Set(prev).add(outcome.id));
@@ -668,6 +681,10 @@ const DesktopAssessmentApp = () => {
         }
         toast.warning(`Offline — assessment queued (${count} pending). Will sync when reconnected.`);
       } else {
+        // Revert the optimistic update if the request genuinely failed
+        if (studentIdOverride) {
+          setTempByOutcomeRatings(prev => { const next = { ...prev }; delete next[saveKey]; return next; });
+        }
         toast.error('Failed to save: ' + (error.message || 'Unknown error'));
       }
     } finally {
@@ -964,7 +981,8 @@ const DesktopAssessmentApp = () => {
       const ratingButtons = (outcome, student) => {
         const saveKey = `${outcome.id}_${student.id}`;
         const isSaving = savingByOutcomeKeys.has(saveKey);
-        const savedRating = termRatingByStudentMap[outcome.id]?.[student.id];
+        // tempByOutcomeRatings provides instant optimistic colour before the API responds
+        const savedRating = tempByOutcomeRatings[saveKey] ?? termRatingByStudentMap[outcome.id]?.[student.id];
         return [
           { symbol: '+', rating: 'EASILY_MEETING', label: 'Easily Meeting' },
           { symbol: '=', rating: 'MEETING', label: 'Meeting' },
@@ -1348,7 +1366,7 @@ const DesktopAssessmentApp = () => {
             </div>
           )}
           {displayedOutcomes.map(outcome => {
-            const latestAssessment = getLatestAssessment(outcome.id);
+            const latestAssessment = latestAssessmentByOutcome[outcome.id] || null;
             // Optimistic temp state takes priority; falls back to DB-sourced rating for this term
             const currentRating = tempAssessments[outcome.id] || termRatingMap[outcome.id] || null;
             const savedRating = termRatingMap[outcome.id];
