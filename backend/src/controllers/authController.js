@@ -835,9 +835,9 @@ export const googleAuth = async (req, res, next) => {
       },
     };
 
-    // Find by googleId first, then fall back to email (account linking)
+    // Find by googleId first, then fall back to email (case-insensitive — Google normalises to lowercase)
     let user = await prisma.user.findFirst({
-      where: { OR: [{ googleId }, { email }] },
+      where: { OR: [{ googleId }, { email: { equals: email, mode: 'insensitive' } }] },
       include: userInclude,
     });
 
